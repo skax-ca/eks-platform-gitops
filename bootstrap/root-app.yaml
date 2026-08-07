@@ -30,11 +30,11 @@ spec:
       #   - clusters/**/values.yaml: helm values(30 §2.3 값 계약). ** 라 depth 무관 —
       #     clusters/<env>/<cluster-name>/values.yaml(중첩 구조)까지 제외한다.
       #     cluster-secret.yaml 은 제외 대상이 아니라 그대로 recurse(클러스터 등록 매니페스트).
+      #   - bootstrap/argocd-values.yaml: ArgoCD 자신의 helm values(23 §2.1 자기 관리의 SSOT).
+      #     ⚠️ 빼먹으면 root App 이 이것을 매니페스트로 오인해 sync 가 깨진다.
       #   - 로컬 helm 차트(Chart.yaml + {{ }} 템플릿)를 추가하면 그 경로도 여기 제외한다 —
       #     recurse 가 템플릿을 매니페스트로 오인하면 sync 가 깨진다(30 §2.2).
-      # ⚠️ 패턴이 하나뿐이라 중괄호를 쓰지 않는다 — PoC 는 두 개라 `{a,b}` 형태였다.
-      #    항목이 늘면 그때 `{a,b}` 로 바꾼다.
-      exclude: 'clusters/**/values.yaml'
+      exclude: '{clusters/**/values.yaml,bootstrap/argocd-values.yaml}'
 
   destination:
     # ⚠️ projects/platform.yaml 의 destinations 와 같은 값이어야 한다.
