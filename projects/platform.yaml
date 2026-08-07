@@ -1,0 +1,48 @@
+# 플랫폼 AppProject — 계층 2(플랫폼 GitOps)의 가드레일
+#
+# 설계: skax-ca/iac-module-library docs/design/30-gitops-repo.md §3
+# seed 순서 3단계(30 §4.1) — 4·5단계(cluster Secret·root App)가 이 프로젝트를 참조하므로 반드시 먼저.
+#
+# ⚠️ ArgoCD 의 `default` AppProject 는 sourceRepos/destinations/clusterResourceWhitelist 가
+#    전부 '*' 인 완전 개방 상태다. 플랫폼 리소스는 이 전용 프로젝트에만 둔다(30 §3).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: 플랫폼팀 소유 계층 2 리소스 (클러스터 등록·addon·컨트롤러 설정)
+
+  # AppProject 는 어느 ns 의 Application 이 자신을 참조할 수 있는지 이 필드로 명시한다.
+  # self-managed 에서는 강제가 아니지만 **규약으로 argocd 하나에 고정**한다
+  # (23 §3 갈림점 4 — 관리형으로 전환해도 매니페스트가 그대로 통하게).
+  sourceNamespaces:
+    - argocd
+
+  # 계층 3(앱팀)으로의 seam — 플랫폼은 이 저장소에서만 배포한다.
+  # ⚠️ sourceRepos 는 destinations·clusterResourceWhitelist 와 별개의 제3 가드레일이다 —
+  #    Application 의 source repoURL 이 여기 없으면 InvalidSpecError 로 sync 자체가 안 선다.
+  # 📌 addon 을 추가할 때마다 그 chart repo 를 여기 추가한다(증분마다 리뷰 지점).
+  #    예: https://aws.github.io/eks-charts (ALBC) · public.ecr.aws/karpenter (Karpenter OCI) ·
+  #        https://argoproj.github.io/argo-helm (ArgoCD 자기 관리 — 23 §2.1)
+  sourceRepos:
+    - https://github.com/skax-ca/iac-platform-gitops.git
+
+  # 등록된 클러스터만 허용. 새 클러스터 등록 시 여기에도 추가한다.
+  # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
+  destinations:
+    # self-managed ArgoCD 는 자신이 도는 클러스터를 이 URL 로 가리킨다(30 §4.1).
+    # ⚠️ 관리형 Capability 로 전환하면 EKS 클러스터 ARN 으로 바뀐다 — 21 §1.7 갈림점 3.
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+
+  # 클러스터 스코프 리소스는 **기본 차단**으로 시작한다.
+  # 📌 addon 증분마다 그 addon 이 실제로 만드는 kind 만 명시 개방한다(30 §3 "실제 필요한 것으로 좁힌다").
+  #    ALBC 를 넣을 때: CRD · ClusterRole · ClusterRoleBinding · Validating/MutatingWebhookConfiguration
+  #    Karpenter 를 넣을 때: karpenter.sh/NodePool · karpenter.sh/NodeClaim · karpenter.k8s.aws/EC2NodeClass
+  clusterResourceWhitelist: []
+
+  # namespace 스코프는 전면 허용 — 플랫폼 계층은 관리자 tier 다.
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
