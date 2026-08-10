@@ -51,11 +51,20 @@ Application / ApplicationSet / AppProject 자체는 **양쪽이 동일**하다 �
 ## 레이아웃
 
 ```
-bootstrap/root-app.yaml   # App-of-Apps root — seed 대상. 이후 자기 자신을 흡수
-clusters/<env>/<cluster>/ # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개 (O(1))
-projects/                 # AppProject 가드레일 — platform.yaml + <team>.yaml
-addons/                   # (예정) helm addon ApplicationSet — cluster generator 로 팬아웃
+bootstrap/root-app.yaml      # App-of-Apps root — seed 대상. 이후 자기 자신을 흡수
+bootstrap/argocd-values.yaml # ArgoCD 자신의 helm values (23 §2.1). root App 훑기에서 제외됨
+bootstrap/argocd-seed.sh     # ⬅ VENDORED — seed 실행 스크립트. SSOT 는 모듈 repo (아래 절)
+clusters/<env>/<cluster>/    # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개 (O(1))
+projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
+addons/                      # (예정) helm addon ApplicationSet — cluster generator 로 팬아웃
 ```
+
+> ℹ️ **`argocd-seed.sh` 는 root App 의 훑기 대상이 아니다** — `exclude` 를 추가하지 않았다.
+> directory 소스는 **`.yaml`·`.yml`·`.json` 만** 읽기 때문이다([ArgoCD 공식 문서](https://argo-cd.readthedocs.io/en/stable/user-guide/directory/):
+> *"A directory-type application loads plain manifest files from `.yml`, `.yaml`, and `.json` files."*).
+> ⛔ 그래서 `exclude` 에 넣지 않는다 — 스캔되지도 않는 것을 제외하면 **죽은 설정**이 되고,
+> 다음 사람이 *".sh 도 스캔되는구나"* 라고 잘못 읽는다. `argocd-values.yaml` 이 제외된 이유는
+> 그것이 **`.yaml` 이라서 실제로 스캔되기 때문**이다 — 둘의 차이가 여기 있다.
 
 **확장 규칙 (O(1))**
 - **새 클러스터** = `clusters/<env>/<cluster>/` 1개. `addons/` 의 ApplicationSet 은 **불변** —
@@ -106,15 +115,59 @@ addons/                   # (예정) helm addon ApplicationSet — cluster gener
 
 ---
 
-## 현재 상태 (2026-08-07)
+## `bootstrap/argocd-seed.sh` — vendoring 규약
 
-**seed 3종 작성 완료 — 아직 클러스터에 적용되지 않았다.**
+**SSOT 는 이 저장소가 아니라 [`skax-ca/iac-module-library`](https://github.com/skax-ca/iac-module-library/blob/main/scripts/argocd-seed.sh) 의 `scripts/argocd-seed.sh` 다.**
+근거는 [`40 §2.5` 결정 ②](https://github.com/skax-ca/iac-module-library/blob/main/docs/design/40-workbench.md).
+
+⛔ **이 사본을 편집하지 않는다.** 고칠 일이 생기면 모듈 repo 를 고치고 여기로 **다시 복사**한다.
+
+왜 사본이 필요한가 — workbench 는 SSM 전용이라 `scp` 가 없고, 이 저장소를 여는 **GitHub App 의
+설치 범위는 이 저장소 하나뿐**이다(모듈 저장소를 그 범위에 넣는 것은 §2.5 가 금지했다 —
+ArgoCD 가 모듈 소스까지 읽게 된다). 사본이 여기 있으면 **클론 한 번으로 매니페스트와 스크립트가
+함께** 온다 ⇒ 두 번째 배달 메커니즘을 만들지 않는다.
+
+> ### 🔍 드리프트 검사 — 모듈 repo 체크아웃에서 한 줄
+>
+> ```bash
+> diff <(grep -v '^#V#' <gitops>/bootstrap/argocd-seed.sh) scripts/argocd-seed.sh
+> ```
+> 사본 머리의 vendoring 배너는 모든 줄이 `#V#` 로 시작한다. **그것을 뺀 나머지는 SSOT 와
+> 바이트 단위로 같아야 한다.** 배너에 접두를 둔 이유가 이것이다 — 검사를 한 줄로 끝내려고.
+>
+> 📌 배너의 "출처"는 **커밋 SHA** 다. §2.5 는 *"출처 태그"* 라 적었지만 `scripts/` 에는 태그 축이
+> 없다(태그는 모듈별 semver 이고 이 스크립트는 `?ref=` 로 소싱되지 않는다).
+>
+> ⚠️ **이것은 경쟁 SSOT 가 아니라 vendoring 이다.** 구분 기준은 *"어디를 고치는가"* 하나다 —
+> 고치는 곳이 하나면 사본이 여럿이어도 SSOT 는 하나다. 사본을 고치는 순간 drift 가 된다.
+
+---
+
+## 현재 상태 (2026-08-10)
+
+✅ **seed 실행 완료 — ArgoCD 부트스트랩 성공**(2026-08-07). root App 이 seed 3종을 흡수했다.
 
 ```
-projects/platform.yaml                                  # seed 3단계
-clusters/dev/eks-ref-dev-an2-main-01/cluster-secret.yaml # seed 4단계
-bootstrap/root-app.yaml                                  # seed 5단계
+projects/platform.yaml                                   # seed 3단계 ✅ 적용·흡수됨
+clusters/dev/eks-ref-dev-an2-main-01/cluster-secret.yaml # seed 4단계 ✅ 적용·흡수됨
+bootstrap/root-app.yaml                                  # seed 5단계 ✅ 자기 자신을 흡수
+bootstrap/argocd-seed.sh                                 # 2026-08-10 vendoring (위 절)
 ```
+
+**판정**(workbench 에서 `kubectl` 실물 조회):
+
+| 항목 | 결과 |
+|---|---|
+| `root-app.status.sync.revision` | ✅ **실제 SHA** `d118838…` = 저장소 HEAD 와 일치(`main` 이 아니다) |
+| sync / health | ✅ `Synced` `Healthy` · `.status.conditions` 비어 있음 |
+| pods | ✅ 5개 Running (controller·applicationset·redis·repo-server·server) |
+
+> ⭐ **revision 이 실제 SHA 이고 HEAD 와 같다는 것이 자기소멸 원칙의 작동 증거다.**
+> "읽었다"가 아니라 **손으로 apply 한 것과 root App 이 흡수한 것의 차이가 0** 이라는 뜻이다 —
+> 차이가 있었다면 `OutOfSync` 로 드러났을 것이다. 🔑 `Synced` 가 이 원칙의 자동 검사다.
+
+⛔ **남은 완료 조건 1건** — 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제(`23 §2.3`).
+아직 하지 않았다. **선택이 아니라 완료 조건**이다.
 
 `addons/` 는 아직 없다(다음 증분). `root-app.yaml` 이 저장소 루트를 훑으므로
 디렉토리가 늘어도 그 파일은 바뀌지 않는다.
@@ -127,7 +180,13 @@ bootstrap/root-app.yaml                                  # seed 5단계
 | `vpc-00e16675363a702a5` | 같은 명령 → `resourcesVpcConfig.vpcId` |
 | `Karpenter-eks-ref-dev-an2-main-01-66112745ef9ad44d7260570055` | `aws iam list-roles` |
 
-**아직 검증되지 않은 것** (apply 시 판정):
-1. `server: https://kubernetes.default.svc` 인 cluster Secret 이 ArgoCD 내장 `in-cluster` 항목을
-   **대체하는지 / 중복으로 뜨는지** — argo-cd v3.5.0 문서에 서술이 없다. `argocd cluster list` 로 본다.
-2. GitHub App 설치 범위에 이 저장소가 포함되는지 — ArgoCD 가 실제 pull 할 때 드러난다.
+**아직 검증되지 않은 것** — 2건 중 **1건 해소**(2026-08-07 apply 판정)
+
+1. ⏳ **남음** — `server: https://kubernetes.default.svc` 인 cluster Secret 이 ArgoCD 내장
+   `in-cluster` 항목을 **대체하는지 / 중복으로 뜨는지**. argo-cd v3.5.0 문서에 서술이 없다.
+   - ⚠️ **"확인됨"으로 쓰지 않는다 — 절반만 봤다.** cluster Secret 은 하나이고 root App 이 그 URL 을
+     target 해 `Synced` 이므로 **해석은 된다.** 그러나 *대체인가 중복인가* 는 `argocd cluster list`
+     나 UI 로만 보인다. ⇒ 이것이 **`40` 열린 항목 7(`argocd` CLI 핀)** 이 필요한 이유다.
+2. ✅ **해소** — GitHub App 설치 범위. installation token 으로 `GET /installation/repositories` 를
+   직접 조회해 **`total_count=1` · 이 저장소 하나**임을 확인했다(2026-08-07).
+   ⛔ 이 범위를 넓히지 않는다 — 모듈 저장소를 넣으면 ArgoCD 가 모듈 소스까지 읽는다(`40 §2.5`).
