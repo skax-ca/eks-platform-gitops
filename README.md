@@ -154,6 +154,12 @@ bootstrap/root-app.yaml                                  # seed 5단계 ✅ 자�
 bootstrap/argocd-seed.sh                                 # 2026-08-10 vendoring (위 절)
 ```
 
+> ### ✅ **`.sh` 를 넣어도 root App 이 깨지지 않는 것이 실증됐다** (2026-08-10)
+>
+> vendoring 커밋 `ba9d079` 이후 root App 은 **`Synced` `Healthy`, `revision=ba9d079…`** 다.
+> directory 소스가 `.yaml`·`.yml`·`.json` 만 읽는다는 공식 문서 서술이 **실물로 확인됐다** —
+> `exclude` 를 추가하지 않은 판단이 맞았다.
+
 **판정**(workbench 에서 `kubectl` 실물 조회):
 
 | 항목 | 결과 |
@@ -182,11 +188,17 @@ bootstrap/argocd-seed.sh                                 # 2026-08-10 vendoring 
 
 **아직 검증되지 않은 것** — 2건 중 **1건 해소**(2026-08-07 apply 판정)
 
-1. ⏳ **남음** — `server: https://kubernetes.default.svc` 인 cluster Secret 이 ArgoCD 내장
-   `in-cluster` 항목을 **대체하는지 / 중복으로 뜨는지**. argo-cd v3.5.0 문서에 서술이 없다.
-   - ⚠️ **"확인됨"으로 쓰지 않는다 — 절반만 봤다.** cluster Secret 은 하나이고 root App 이 그 URL 을
-     target 해 `Synced` 이므로 **해석은 된다.** 그러나 *대체인가 중복인가* 는 `argocd cluster list`
-     나 UI 로만 보인다. ⇒ 이것이 **`40` 열린 항목 7(`argocd` CLI 핀)** 이 필요한 이유다.
+1. ✅ **해소**(2026-08-10) — cluster Secret 이 내장 `in-cluster` 를 **대체한다. 중복이 아니다.**
+   `argocd admin cluster stats -n argocd` 결과 **서버 항목이 하나뿐**이다:
+   ```
+   SERVER                          SHARD  CONNECTION  NAMESPACES  APPS  RESOURCES
+   https://kubernetes.default.svc  0      Successful  1           1     536
+   ```
+   - ⚠️ **`argocd login` 없이 판정했다** — `argocd admin` 은 API 서버가 아니라 **k8s 를 직접 읽는다.**
+     초기 비밀번호를 조회하지 않고도 닫을 수 있었던 이유다(아래 완료 조건은 여전히 미이행).
+   - 🔴 **함정**: `-n argocd` 를 빠뜨리면 *"`argocd-cm` 을 찾을 수 없다"* 는 경고가 나온다.
+     **설정 공백이 아니라 네임스페이스 누락**이다.
+   - 도구는 `workbench-v0.3.0` 이 넣은 `argocd` CLI v3.5.0 이다(`40` 열린 항목 7).
 2. ✅ **해소** — GitHub App 설치 범위. installation token 으로 `GET /installation/repositories` 를
    직접 조회해 **`total_count=1` · 이 저장소 하나**임을 확인했다(2026-08-07).
    ⛔ 이 범위를 넓히지 않는다 — 모듈 저장소를 넣으면 ArgoCD 가 모듈 소스까지 읽는다(`40 §2.5`).
