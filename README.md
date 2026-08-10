@@ -103,6 +103,42 @@ addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root Ap
 - **cert-manager · external-dns · 관측성 컨트롤러는 여기 없다** — Terraform community addon 소관이고,
   이 저장소에는 그 **설정(CR·애노테이션)만** 놓인다.
 
+> ## ⭐ **D-ADDON-NS — addon 네임스페이스 규칙** (2026-08-10 확정)
+>
+> **계층 2(GitOps helm addon)는 addon 마다 전용 네임스페이스를 신설한다.**
+> **예외는 둘뿐 — `aws-load-balancer-controller` · `karpenter` → `kube-system`.**
+>
+> ⛔ 예외를 늘리려면 **아래에 준하는 근거**를 대야 한다. *"차트 기본값이 `kube-system` 이라서"* 는
+> 근거가 아니다. 규칙 본문·근거 전문은
+> [`30 §2.9`](https://github.com/skax-ca/iac-module-library/blob/main/docs/design/30-gitops-repo.md).
+>
+> | # | 예외 근거 | 성격 |
+> |---|---|---|
+> | 1 | **Karpenter 공식이 이유까지 밝힌다** — `kube-system` 의 호출만 `system-leader-election`·`kube-system-service-accounts` **FlowSchema** 를 타고 `leader-election`·`workload-high` 우선순위로 간다. 다른 ns 면 **custom FlowSchema 를 우리가 소유**해야 한다 | ⭐ **기술적**(APF). 어기면 apiserver 스로틀링 때 **Karpenter 가 굶는다** |
+> | 2 | **ALBC 도 공식이 `kube-system`** — AWS EKS User Guide · upstream kubernetes-sigs 둘 다 | 관례 |
+> | 3 | **Pod Identity association 이 이미 `kube-system`** | **집행 장치** — 어기면 자격증명이 안 붙는다 |
+>
+> ⚠️ **3 을 1·2 보다 앞에 적지 않는다.** 그러면 *"IaC 우연에 GitOps 를 맞췄다"* 로 읽힌다 —
+> 공식 권고가 먼저 있고, 3 은 그것을 어길 수 없게 만드는 장치다.
+> 🔑 실제로 **가역적**이다: upstream 이 `namespace` 변수를 노출한다(기본 `kube-system`).
+> ⇒ *"못 바꾼다"* 가 아니라 **"안 바꾼다"** 다.
+>
+> ⛔ **근거로 쓰지 말 것** — *"`system-cluster-critical` 은 `kube-system` 전용"* 은 **틀렸다.**
+> `default` ns server-side dry-run 통과(실측 2026-08-10) · k8s master·1.31 admission plugin 에
+> 그 제약 없음. **구버전 제약의 기억이다. 되살리지 말 것.**
+>
+> ### 🔧 전용 ns addon 을 넣을 때
+> `syncPolicy.syncOptions` 에 **`CreateNamespace=true`** 를 넣는다.
+> ⚠️ **첫 전용-ns addon 에서 판정할 것 2건**(argo-cd 문서에 서술이 없다):
+> ① 생성되는 Namespace 가 AppProject `clusterResourceWhitelist` 적용을 받는가
+> (받으면 `{group: "", kind: Namespace}` 를 열어야 한다)
+> ② `managedNamespaceMetadata` 는 그 ns 를 **ArgoCD 추적 대상**으로 만든다(공식: *"manage namespace
+> lifecycle operations like deletion"*) ⇒ 🔴 **`prune: true` 와 겹치면 addon 제거가 ns 째 지운다.**
+>
+> ℹ️ **계층 1(Terraform managed/community addon)은 이 규칙의 대상이 아니다** — ns 를 AWS·차트가
+> 정하고 우리가 고르지 않는다. 결과적으로 어긋나지도 않는다(실측):
+> `kube-system` = coredns·ebs-csi·metrics-server / `cert-manager` / `external-dns`.
+
 ---
 
 ## 부트스트랩 — 자기소멸(self-superseding) 원칙

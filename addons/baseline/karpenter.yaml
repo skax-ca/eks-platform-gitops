@@ -6,9 +6,33 @@
 #    ① 컨트롤러 helm  — chart 가 NodePool/NodeClaim/EC2NodeClass CRD 를 동봉한다 (sync-wave 0)
 #    ② CR (NodePool/EC2NodeClass) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
 #
+# 📌 네임스페이스 = **kube-system** — D-ADDON-NS(30 §2.9)의 **예외 2개 중 하나**다.
+#    ⚠️ 이 repo 의 기본 규칙은 "계층 2 addon 은 전용 네임스페이스를 신설한다" 이고,
+#       ALBC·Karpenter 만 예외다. 새 addon 을 이 파일에서 복사할 때 **이 줄을 함께 가져가지 말 것.**
+#
+#    ⭐ **이 예외의 기술적 근거는 Karpenter 가 갖고 있다 — APF(API Priority & Fairness) 다.**
+#    Karpenter 공식 문서 원문:
+#      "By default, Karpenter is installed into the kube-system namespace, which leverages the
+#       system-leader-election and kube-system-service-accounts FlowSchemas to map calls from the
+#       kube-system namespace to the leader-election and workload-high PriorityLevelConfigurations…
+#       If you install Karpenter in a different namespace than the default kube-system namespace,
+#       Karpenter will not be put into these higher-priority FlowSchemas by default. Instead, you
+#       will need to create custom FlowSchemas."
+#    ⇒ 전용 ns 로 옮기면 **apiserver 가 스로틀링될 때 Karpenter 가 우선순위 버킷에서 빠져 굶는다.**
+#       우회하려면 공식 스크립트의 FlowSchema 2개(karpenter-leader-election precedence 200 +
+#       karpenter-workload precedence 1000, apiGroups '*' · clusterScope true · verbs '*')를
+#       **우리가 소유하고 upstream 변경을 따라가야** 한다. cluster-scoped 리소스가 2개 늘고
+#       AppProject whitelist 에 flowcontrol.apiserver.k8s.io/FlowSchema 도 열어야 한다.
+#
+#    ⛔ **근거로 쓰지 말 것**: "차트 기본이 priorityClassName: system-cluster-critical 이고 그
+#       PriorityClass 는 kube-system 전용이다" 는 **틀렸다** — default ns server-side dry-run 통과
+#       (실측 2026-08-10). 구버전 제약의 기억이다.
+#
 # 🔴 Terraform 전제(전부 완비 — 실측 2026-08-10):
 #    · 컨트롤러 IAM role · 노드 IAM role · 중단 SQS `Karpenter-eks-ref-dev-an2-main-01`
 #    · Pod Identity association **kube-system/karpenter**
+#      (upstream `modules/karpenter` v21.24.1 의 `namespace` 기본값. **변수로 노출돼 있어 가역적**이다 —
+#       우리 facade 가 안 넘길 뿐이라 "못 바꾼다"가 아니라 "안 바꾼다"다)
 #    · 노드 SG 의 `karpenter.sh/discovery` 태그 (modules/eks-cluster 가 계약으로 부여, 20 §5.2)
 ---
 # ────────────────────────────────────────────────────────────────────────────
@@ -65,9 +89,8 @@ spec:
             replicas: 2
       destination:
         server: '{{server}}'
-        # 🔴 upstream terraform-aws-modules/eks//modules/karpenter v21.24.1 의 기본값이
-        #    kube-system/karpenter 이고 우리 모듈이 그대로 쓴다(실측). Karpenter 공식 문서의
-        #    관례인 `karpenter` ns 에 배포하면 **Pod Identity 가 붙지 않는다.**
+        # D-ADDON-NS 예외 (30 §2.9) — APF FlowSchema. 근거 전문은 위 헤더.
+        # ⚠️ 다른 addon 은 전용 ns 를 신설한다(CreateNamespace=true).
         namespace: kube-system
       syncPolicy:
         automated:

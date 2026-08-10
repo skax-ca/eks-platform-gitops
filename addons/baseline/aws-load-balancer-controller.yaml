@@ -8,10 +8,19 @@
 # ⚠️ 왜 helm 인가 — EKS community addon 에 ALBC 가 **없다**(D-ADDON-BOUNDARY 판정, 20 §1.1).
 #    "GitOps 가 좋아서"가 아니라 **다른 경로가 없어서**다.
 #
-# 🔴 IAM 은 Terraform 전제다. 이 매니페스트는 SA 이름만 맞춘다 —
-#    Pod Identity association 이 (cluster, ns, SA) 를 role 에 바인딩한다(20 §2.6a).
-#    실측 2026-08-10: association 이 **kube-system/aws-load-balancer-controller** 로 존재한다.
-#    ⇒ destination.namespace 를 바꾸면 컨트롤러가 AWS 자격증명을 못 받는다. **kube-system 고정.**
+# 📌 네임스페이스 = **kube-system** — D-ADDON-NS(30 §2.9)의 **예외 2개 중 하나**다.
+#    ⚠️ 이 repo 의 기본 규칙은 "계층 2 addon 은 전용 네임스페이스를 신설한다" 이고,
+#       ALBC·Karpenter 만 예외다. 새 addon 을 이 파일을 참고해 만들 때 **이 줄을 복사하지 말 것.**
+#    근거 3겹(순서가 중요하다 — 3만 적으면 논리가 뒤집힌다):
+#      1. AWS EKS User Guide 가 `eksctl create iamserviceaccount --namespace=kube-system` +
+#         `helm ... -n kube-system` 을 쓴다. upstream kubernetes-sigs 설치 가이드도 동일하다.
+#      2. (Karpenter 쪽 근거) APF FlowSchema — addons/baseline/karpenter.yaml 헤더 참조.
+#         두 컨트롤러를 같은 ns 에 두는 편이 예외를 하나로 유지한다.
+#      3. **집행 장치** — Pod Identity association 이 kube-system/aws-load-balancer-controller 다
+#         (modules/eks-cluster/iam.tf 가 명시. 실측 2026-08-10).
+#         ⇒ ns 를 바꾸면 컨트롤러가 AWS 자격증명을 **못 받는다.**
+#
+# 🔴 IAM 자체는 Terraform 전제다. 이 매니페스트는 **SA 이름만** 맞춘다(20 §2.6a).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -66,7 +75,7 @@ spec:
         # self-managed ArgoCD 는 자신이 도는 클러스터를 이 URL 로 가리킨다(30 §4.1).
         # ⚠️ 관리형 Capability 로 전환하면 EKS 클러스터 ARN 이다 — 21 §1.7 갈림점 3.
         server: '{{server}}'
-        # 🔴 Pod Identity association 이 kube-system 에 있다. 바꾸지 말 것(위 헤더 참조).
+        # D-ADDON-NS 예외 (30 §2.9) — 근거는 위 헤더. ⚠️ 다른 addon 은 전용 ns 를 신설한다.
         namespace: kube-system
       syncPolicy:
         automated:
