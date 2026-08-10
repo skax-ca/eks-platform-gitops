@@ -113,6 +113,35 @@ addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root Ap
 > - helm 템플릿: `{{- /* +argocd:skip-file-rendering … */ -}}` —
 >   **파일 내용에는 남고 렌더 출력에는 안 남는다**(검증됨)
 >
+> ### 🔴 **마커의 함정 — 마커를 *설명하는* 주석도 마커다** (2026-08-10, 실제로 밟았다)
+>
+> 판정은 **파일 전체 문자열 포함 검사**다(`bytes.Contains`). 주석이든 문서든 그 문자열이 **한 번이라도
+> 나타나면** 그 파일은 통째로 스캔에서 빠진다.
+>
+> 실제로 `bootstrap/root-app.yaml` 의 주석에 마커를 그대로 적었다가 **root-app 이 자기 자신을
+> 스캔에서 제외**했다. 결과는 조용하다 — 에러가 없고 이렇게만 나온다:
+> ```
+> RESULT PruneSkipped Application/root-app :: ignored (requires pruning)
+> log: Skipping auto-sync: need to prune extra resources only but automated prune is disabled
+> ```
+> 저장소 렌더 결과에 root-app 이 없으니 **live 에만 있는 여분 리소스**가 되고, 영구 `OutOfSync` 다.
+>
+> > ## ⭐ **`prune: false` 가 재앙을 막았다**
+> > root-app 이 "저장소에 없는 리소스"로 분류됐으므로, `prune: true` 였다면 **root App 이 스스로를
+> > 삭제**하고 seed 를 처음부터 다시 밟아야 했다. `30 §4` 가 *"root 레벨에서 prune 을 켜면 저장소
+> > 실수 하나가 seed 를 다시 밟게 한다"* 고 적은 시나리오가 **정확히 실현됐고 그 결정이 막았다.**
+>
+> ⇒ **규칙**: 마커 문자열은 **`.md` 문서**(스캔 대상 확장자가 아니다 — `^.*\.(yaml|yml|json|jsonnet)$`
+> 만 스캔한다)나 **실제로 제외할 파일**에만 적는다. 다른 `.yaml` 에는 *"README 의 D-ROOTAPP-SKIP 참조"*
+> 로만 가리킨다.
+>
+> **자기 점검 한 줄** — 의도 밖 파일이 마커를 물고 있지 않은지:
+> ```bash
+> grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --include='*.json' . \
+>   | grep -v '^./addons/karpenter/nodepool/'
+> ```
+> 출력이 있으면 그 파일은 **조용히 스캔에서 빠지고 있다.**
+>
 > ℹ️ 기존 `exclude` 2개(`clusters/**/values.yaml`·`bootstrap/argocd-values.yaml`)는 **그대로 둔다** —
 > 동작 중인 것을 건드리지 않는다. **늘리지만 않는다.**
 

@@ -33,8 +33,11 @@ spec:
       #   - bootstrap/argocd-values.yaml: ArgoCD 자신의 helm values(23 §2.1 자기 관리의 SSOT).
       #     ⚠️ 빼먹으면 root App 이 이것을 매니페스트로 오인해 sync 가 깨진다.
       #
-      # 🔴 **이 목록을 늘리지 않는다 — 새로 제외할 파일에는 `+argocd:skip-file-rendering`
-      #    마커를 넣는다**(README 의 D-ROOTAPP-SKIP). 2026-08-10 에 여기에
+      # 🔴 **이 목록을 늘리지 않는다 — 새로 제외할 파일에는 skip-rendering 마커를 넣는다**
+      #    (README 의 **D-ROOTAPP-SKIP** 이 마커 문자열과 사용법을 소유한다).
+      #    ⛔ **이 파일에 그 마커 문자열을 적지 말 것** — 판정이 파일 전체 문자열 포함 검사라
+      #       주석에 적기만 해도 root-app.yaml 이 **자기 자신을 스캔에서 제외**한다.
+      #       2026-08-10 에 실제로 그렇게 만들었다(README 참조). 2026-08-10 에 여기에
       #    `addons/karpenter/nodepool/**` 를 추가했다가 **자기소멸 데드락**을 만들었다:
       #      · root-app 은 자기 spec 을 git 에서 읽어 갱신하는데, 그러려면 먼저 저장소를 렌더해야 한다
       #      · 렌더는 **아직 적용되지 않은 옛 exclude** 로 수행된다
