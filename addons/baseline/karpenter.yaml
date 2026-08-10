@@ -1,0 +1,149 @@
+# Karpenter — ①baseline addon (컨트롤러 helm + NodePool/EC2NodeClass)
+#
+# 설계: skax-ca/iac-module-library docs/design/30-gitops-repo.md §2.2 Karpenter 증분 · §2.9
+#
+# ⭐ ApplicationSet 이 **2개**인 이유는 CRD 순서다. 파일은 하나로 유지한다(O(1)).
+#    ① 컨트롤러 helm  — chart 가 NodePool/NodeClaim/EC2NodeClass CRD 를 동봉한다 (sync-wave 0)
+#    ② CR (NodePool/EC2NodeClass) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
+#
+# 📌 네임스페이스 = **kube-system** — D-ADDON-NS(30 §2.9)의 **예외 2개 중 하나**다.
+#    ⚠️ 이 repo 의 기본 규칙은 "계층 2 addon 은 전용 네임스페이스를 신설한다" 이고,
+#       ALBC·Karpenter 만 예외다. 새 addon 을 이 파일에서 복사할 때 **이 줄을 함께 가져가지 말 것.**
+#
+#    ⭐ **이 예외의 기술적 근거는 Karpenter 가 갖고 있다 — APF(API Priority & Fairness) 다.**
+#    Karpenter 공식 문서 원문:
+#      "By default, Karpenter is installed into the kube-system namespace, which leverages the
+#       system-leader-election and kube-system-service-accounts FlowSchemas to map calls from the
+#       kube-system namespace to the leader-election and workload-high PriorityLevelConfigurations…
+#       If you install Karpenter in a different namespace than the default kube-system namespace,
+#       Karpenter will not be put into these higher-priority FlowSchemas by default. Instead, you
+#       will need to create custom FlowSchemas."
+#    ⇒ 전용 ns 로 옮기면 **apiserver 가 스로틀링될 때 Karpenter 가 우선순위 버킷에서 빠져 굶는다.**
+#       우회하려면 공식 스크립트의 FlowSchema 2개(karpenter-leader-election precedence 200 +
+#       karpenter-workload precedence 1000, apiGroups '*' · clusterScope true · verbs '*')를
+#       **우리가 소유하고 upstream 변경을 따라가야** 한다. cluster-scoped 리소스가 2개 늘고
+#       AppProject whitelist 에 flowcontrol.apiserver.k8s.io/FlowSchema 도 열어야 한다.
+#
+#    ⛔ **근거로 쓰지 말 것**: "차트 기본이 priorityClassName: system-cluster-critical 이고 그
+#       PriorityClass 는 kube-system 전용이다" 는 **틀렸다** — default ns server-side dry-run 통과
+#       (실측 2026-08-10). 구버전 제약의 기억이다.
+#
+# 🔴 Terraform 전제(전부 완비 — 실측 2026-08-10):
+#    · 컨트롤러 IAM role · 노드 IAM role · 중단 SQS `Karpenter-eks-ref-dev-an2-main-01`
+#    · Pod Identity association **kube-system/karpenter**
+#      (upstream `modules/karpenter` v21.24.1 의 `namespace` 기본값. **변수로 노출돼 있어 가역적**이다 —
+#       우리 facade 가 안 넘길 뿐이라 "못 바꾼다"가 아니라 "안 바꾼다"다)
+#    · 노드 SG 의 `karpenter.sh/discovery` 태그 (modules/eks-cluster 가 계약으로 부여, 20 §5.2)
+---
+# ────────────────────────────────────────────────────────────────────────────
+# ① 컨트롤러 (OCI helm)
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: karpenter
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            environment: dev
+  template:
+    metadata:
+      name: '{{name}}-karpenter'
+      annotations:
+        # CR(②)보다 먼저 만들어지게 한다. ⚠️ wave 는 생성 순서를 정할 뿐 sync 완료를 기다리지 않는다 —
+        #    실제 안전장치는 ②의 SkipDryRunOnMissingResource 와 ArgoCD 의 재시도다.
+        argocd.argoproj.io/sync-wave: "0"
+    spec:
+      project: platform
+      source:
+        # ⚠️ OCI registry 다. ALBC 의 HTTP helm repo 와 **다른 호스트**라 egress 를 따로 봐야 했다.
+        #    실측 2026-08-10(canary): revision 1.14.0 해석 + rendered 18, conditions 없음.
+        #    ⭐ Repository Secret 도 enableOCI 설정도 **필요 없었다** — scheme 없는 repoURL 만으로 pull 된다.
+        repoURL: public.ecr.aws/karpenter
+        chart: karpenter
+        # 실측 핀 — ECR Public 태그 전수(2,317개, Link 헤더 페이지네이션) 중 최신.
+        # 근거: 호환성 매트릭스 원문 `1.35 → >= 1.9` (1.36 → >= 1.13 이라 다음 업그레이드도 충족).
+        # 🔑 OCI 태그가 곧 chart 버전이다 — GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
+        targetRevision: 1.14.0
+        helm:
+          parameters:
+            # 이 값이 없으면 helm template 이 실패한다:
+            #   "Chart cannot be installed without a valid settings.clusterName!"
+            # ⚠️ 그 실패는 rendered 0 + ComparisonError 로 나타나 **egress 실패와 똑같이 보인다.**
+            #    구분 신호는 revision 해석 여부다(30 §2.9 판독법).
+            - name: settings.clusterName
+              value: '{{name}}'
+            # Terraform 서브모듈이 SQS 를 `Karpenter-<cluster>` 로 명명한다 ⇒ 클러스터명에서 **파생**된다.
+            # 라벨을 새로 만들지 않는 이유가 이것이다(30 §2.2 (3)).
+            - name: settings.interruptionQueue
+              value: 'Karpenter-{{name}}'
+          values: |
+            # Pod Identity 바인딩 대상(kube-system/karpenter). IRSA 애노테이션 불필요.
+            serviceAccount:
+              create: true
+              name: karpenter
+            # leader election HA. ⚠️ 노드 2개짜리 dev 라 그 이상은 의미가 없다.
+            replicas: 2
+      destination:
+        server: '{{server}}'
+        # D-ADDON-NS 예외 (30 §2.9) — APF FlowSchema. 근거 전문은 위 헤더.
+        # ⚠️ 다른 addon 은 전용 ns 를 신설한다(CreateNamespace=true).
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - ServerSideApply=true
+---
+# ────────────────────────────────────────────────────────────────────────────
+# ② NodePool / EC2NodeClass (계층 2 = 인프라 CR — 30 §0.1 D-CR-OWNERSHIP)
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: karpenter-nodepool
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            environment: dev
+  template:
+    metadata:
+      name: '{{name}}-karpenter-nodepool'
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+    spec:
+      project: platform
+      source:
+        # 이 저장소의 로컬 helm 차트다. ⚠️ ApplicationSet 의 fasttemplate 은 **Application spec** 에만
+        #    적용되고 git 경로 안의 파일에는 적용되지 않는다 ⇒ per-cluster 값을 넘기려면 helm 이 필요하다.
+        #    ⛔ 그래서 root-app 의 exclude 에 이 경로가 들어간다(차트를 매니페스트로 오인하면 sync 가 깨진다).
+        repoURL: https://github.com/skax-ca/iac-platform-gitops.git
+        targetRevision: main
+        path: addons/karpenter/nodepool
+        helm:
+          parameters:
+            - name: clusterName
+              value: '{{name}}'
+            # 🔑 Karpenter 가 필요로 하는 값 중 **유일하게 클러스터명에서 파생 불가**한 값이다
+            #    (role 이름에 26자 hash 접미가 붙는다). 그래서 라벨이 하나 필요하다.
+            - name: nodeRole
+              value: '{{metadata.labels.karpenterNodeRole}}'
+      destination:
+        server: '{{server}}'
+        # CR 은 cluster-scoped 라 이 ns 는 형식상 값이다.
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
+          - SkipDryRunOnMissingResource=true
+          - ServerSideApply=true
