@@ -32,13 +32,18 @@ spec:
       #     cluster-secret.yaml 은 제외 대상이 아니라 그대로 recurse(클러스터 등록 매니페스트).
       #   - bootstrap/argocd-values.yaml: ArgoCD 자신의 helm values(23 §2.1 자기 관리의 SSOT).
       #     ⚠️ 빼먹으면 root App 이 이것을 매니페스트로 오인해 sync 가 깨진다.
-      #   - addons/karpenter/nodepool/**: 로컬 helm 차트(Chart.yaml + {{ }} 템플릿).
-      #     ⚠️ 위 줄이 예고한 경우가 실제로 왔다(2026-08-10, ALBC·Karpenter 증분).
-      #     이 차트는 addons/baseline/karpenter.yaml 의 ②ApplicationSet 이 소싱한다 —
-      #     root-app 이 같은 파일을 매니페스트로도 읽으면 {{ }} 가 그대로 apply 돼 sync 가 깨진다.
-      #     ⛔ addons/baseline/*.yaml 은 제외 대상이 **아니다** — 그건 진짜 매니페스트
-      #        (ApplicationSet)이고 root-app 이 흡수해야 App-of-Apps 가 성립한다.
-      exclude: '{clusters/**/values.yaml,bootstrap/argocd-values.yaml,addons/karpenter/nodepool/**}'
+      #
+      # 🔴 **이 목록을 늘리지 않는다 — 새로 제외할 파일에는 `+argocd:skip-file-rendering`
+      #    마커를 넣는다**(README 의 D-ROOTAPP-SKIP). 2026-08-10 에 여기에
+      #    `addons/karpenter/nodepool/**` 를 추가했다가 **자기소멸 데드락**을 만들었다:
+      #      · root-app 은 자기 spec 을 git 에서 읽어 갱신하는데, 그러려면 먼저 저장소를 렌더해야 한다
+      #      · 렌더는 **아직 적용되지 않은 옛 exclude** 로 수행된다
+      #      · 옛 exclude 는 새 차트 템플릿을 걸러내지 못한다 → ComparisonError
+      #      · 렌더가 실패하니 새 exclude 가 영원히 적용되지 않는다 (무한 루프)
+      #    ⚠️ 패턴이 틀린 게 아니었다 — gobwas/glob 로 검증하면 그 패턴은 정확히 매치한다.
+      #       **순서 문제**다: spec 변경과 그 변경이 있어야 읽을 수 있는 파일은 같은 커밋에 못 넣는다.
+      #    ⇒ 마커는 파일 안에 있으므로 이 spec 을 건드리지 않는다. **순서 제약이 아예 없다.**
+      exclude: '{clusters/**/values.yaml,bootstrap/argocd-values.yaml}'
 
   destination:
     # ⚠️ projects/platform.yaml 의 destinations 와 같은 값이어야 한다.

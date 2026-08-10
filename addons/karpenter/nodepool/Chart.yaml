@@ -1,3 +1,6 @@
+# +argocd:skip-file-rendering
+#   ⚠️ 이 마커는 root-app(directory 소스)이 이 파일을 매니페스트로 읽지 않게 한다.
+#      root-app 의 exclude 로 하지 않는 이유는 README 의 D-ROOTAPP-SKIP 상자 참조.
 apiVersion: v2
 name: karpenter-nodepool
 description: |

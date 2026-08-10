@@ -1,3 +1,4 @@
+{{- /* +argocd:skip-file-rendering — root-app 훑기 제외. 렌더 출력에는 남지 않는다 */ -}}
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:

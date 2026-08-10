@@ -68,10 +68,53 @@ addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root Ap
 > ApplicationSet 의 fasttemplate(`{{name}}`)은 **Application spec 에만** 적용되고 git 경로 안의
 > 파일에는 적용되지 않는다. per-cluster 값(clusterName·nodeRole)을 CR 에 넣을 다른 수단이 없어
 > 차트가 됐다 — 템플릿 2개짜리 최소 차트다.
-> ⛔ **그래서 `root-app.yaml` 의 `exclude` 에 이 경로가 들어간다.** 빼먹으면 root App 이
-> `{{ }}` 가 든 템플릿을 매니페스트로 오인해 sync 가 깨진다.
+> ⇒ root App 이 이 파일들을 매니페스트로 오인하면 `{{ }}` 가 그대로 apply 돼 sync 가 깨진다.
+> **아래 D-ROOTAPP-SKIP 이 그 처리를 소유한다.**
 > ✅ 반대로 **`addons/baseline/*.yaml` 은 제외하지 않는다** — 그건 진짜 매니페스트(ApplicationSet)이고
-> root App 이 흡수해야 App-of-Apps 가 성립한다. 🔑 **둘의 차이가 exclude 판단의 기준이다.**
+> root App 이 흡수해야 App-of-Apps 가 성립한다. 🔑 **둘의 차이가 판단의 기준이다.**
+
+> ## 🔴 **D-ROOTAPP-SKIP — root App 훑기에서 파일을 빼는 방법** (2026-08-10, 실패에서 배움)
+>
+> **`exclude` 를 늘리지 않는다. 파일 안에 `+argocd:skip-file-rendering` 마커를 넣는다.**
+>
+> ### 왜 — `exclude` 확장은 **자기소멸 데드락**을 만든다 (실제로 만들었다)
+>
+> 증분 ①(PR #1)을 머지하자 root App 이 `ComparisonError` 로 멈췄다:
+> ```
+> Failed to unmarshal "ec2nodeclass.yaml": json: offset 2:
+>   invalid character '{' looking for beginning of object key string
+> ```
+> 같은 커밋에 ⓐ 차트 파일과 ⓑ 그것을 걸러낼 `exclude` 를 함께 넣은 것이 원인이다.
+>
+> 1. root App 은 **자기 spec 을 git 에서 읽어 갱신**한다 — 그러려면 **먼저 저장소를 렌더**해야 한다
+> 2. 렌더는 **아직 적용되지 않은 옛 `exclude`** 로 수행된다
+> 3. 옛 `exclude` 는 새 차트 템플릿을 못 걸러낸다 → 렌더 실패
+> 4. 렌더가 실패하니 **새 `exclude` 가 영원히 적용되지 않는다** — 무한 루프
+>
+> ⚠️ **패턴이 틀린 게 아니었다.** `gobwas/glob`(ArgoCD 가 쓰는 엔진, separators 없이 컴파일)로
+> 검증하면 `{…,addons/karpenter/nodepool/**}` 는 `addons/karpenter/nodepool/templates/ec2nodeclass.yaml`
+> 에 **정확히 매치한다.** 실물 root App 의 `.spec.source.directory.exclude` 가 **옛 값 그대로**였던 것이
+> 증거다. 🔑 **글롭 문제로 오진하고 패턴을 계속 바꿨다면 영원히 못 고쳤을 것이다.**
+>
+> ### ⭐ 마커가 우월한 이유 — 순서 제약이 **사라진다**
+>
+> | | `exclude` | **마커** |
+> |---|---|---|
+> | 어디에 사는가 | root App **spec** | **파일 자신** |
+> | 새 파일 추가 시 | spec 변경 필요 → **데드락 가능** | 변경 없음 |
+> | 파일 이동·개명 | 패턴을 같이 고쳐야 함 | **따라간다** |
+> | 판정 방식 | 경로 글롭 | 내용 검사(`bytes.Contains`) |
+>
+> ⇒ **파일이 태어날 때부터 스스로 제외된다.** ArgoCD 소스(`reposerver/repository/repository.go`)에서
+> 마커 검사는 `exclude`·`include` **다음**에 오므로 둘은 충돌하지 않는다.
+>
+> ### 쓰는 법
+> - 평문 YAML(`Chart.yaml`·`values.yaml`): `# +argocd:skip-file-rendering`
+> - helm 템플릿: `{{- /* +argocd:skip-file-rendering … */ -}}` —
+>   **파일 내용에는 남고 렌더 출력에는 안 남는다**(검증됨)
+>
+> ℹ️ 기존 `exclude` 2개(`clusters/**/values.yaml`·`bootstrap/argocd-values.yaml`)는 **그대로 둔다** —
+> 동작 중인 것을 건드리지 않는다. **늘리지만 않는다.**
 
 > ℹ️ **`argocd-seed.sh` 는 root App 의 훑기 대상이 아니다** — `exclude` 를 추가하지 않았다.
 > directory 소스는 **`.yaml`·`.yml`·`.json` 만** 읽기 때문이다([ArgoCD 공식 문서](https://argo-cd.readthedocs.io/en/stable/user-guide/directory/):
