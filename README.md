@@ -11,8 +11,11 @@
 | [`docs/design/21-gitops-bootstrap-seam.md`](https://github.com/skax-ca/iac-module-library/blob/main/docs/design/21-gitops-bootstrap-seam.md) | 경로 선택(D-GITOPS-SEAM)과 **갈림점 6개** |
 | [`docs/design/40-workbench.md`](https://github.com/skax-ca/iac-module-library/blob/main/docs/design/40-workbench.md) | seed 수행 지점(workbench), ArgoCD 도달 절차 |
 
-> ⚠️ **`30` 은 부분 개정 문서다** — §1.1·§4.1 만 확정이고 나머지는 PoC 전제가 남아 있다.
-> **인용할 때 절 번호까지 확인**한다.
+> ⚠️ **`30` 은 부분 개정 문서다.** **인용할 때 절 번호까지 확인**한다.
+> 2026-08-10 2차 개정으로 addon 증분이 딛는 절이 열렸다 — **§2.9**(팬아웃 경로 판정 + egress·핀 실측) ·
+> **§3.1**(AppProject 경로별 값 + 선결 과제 재판정) · **§5**(인용 제한 해제).
+> ⛔ 어느 절이 확정인지는 여기 적지 않는다 — **[모듈 repo 의 `docs/README.md` 상태표](https://github.com/skax-ca/iac-module-library/blob/main/docs/README.md)**
+> 와 문서 상단 상태 상자가 소유한다(사본을 두면 stale 해진다).
 
 ---
 
@@ -56,8 +59,19 @@ bootstrap/argocd-values.yaml # ArgoCD 자신의 helm values (23 §2.1). root App
 bootstrap/argocd-seed.sh     # ⬅ VENDORED — seed 실행 스크립트. SSOT 는 모듈 repo (아래 절)
 clusters/<env>/<cluster>/    # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개 (O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
-addons/                      # (예정) helm addon ApplicationSet — cluster generator 로 팬아웃
+addons/baseline/             # ①baseline helm addon ApplicationSet — cluster generator 로 팬아웃
+addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root App 훑기에서 제외됨
 ```
+
+> ### ⚠️ **`addons/karpenter/nodepool/` 이 helm 차트인 이유 — 추상화가 아니라 제약이다**
+>
+> ApplicationSet 의 fasttemplate(`{{name}}`)은 **Application spec 에만** 적용되고 git 경로 안의
+> 파일에는 적용되지 않는다. per-cluster 값(clusterName·nodeRole)을 CR 에 넣을 다른 수단이 없어
+> 차트가 됐다 — 템플릿 2개짜리 최소 차트다.
+> ⛔ **그래서 `root-app.yaml` 의 `exclude` 에 이 경로가 들어간다.** 빼먹으면 root App 이
+> `{{ }}` 가 든 템플릿을 매니페스트로 오인해 sync 가 깨진다.
+> ✅ 반대로 **`addons/baseline/*.yaml` 은 제외하지 않는다** — 그건 진짜 매니페스트(ApplicationSet)이고
+> root App 이 흡수해야 App-of-Apps 가 성립한다. 🔑 **둘의 차이가 exclude 판단의 기준이다.**
 
 > ℹ️ **`argocd-seed.sh` 는 root App 의 훑기 대상이 아니다** — `exclude` 를 추가하지 않았다.
 > directory 소스는 **`.yaml`·`.yml`·`.json` 만** 읽기 때문이다([ArgoCD 공식 문서](https://argo-cd.readthedocs.io/en/stable/user-guide/directory/):
@@ -175,8 +189,53 @@ bootstrap/argocd-seed.sh                                 # 2026-08-10 vendoring 
 ⛔ **남은 완료 조건 1건** — 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제(`23 §2.3`).
 아직 하지 않았다. **선택이 아니라 완료 조건**이다.
 
-`addons/` 는 아직 없다(다음 증분). `root-app.yaml` 이 저장소 루트를 훑으므로
-디렉토리가 늘어도 그 파일은 바뀌지 않는다.
+### 🚧 addon 증분 ① — ALBC + Karpenter (2026-08-10, 미머지 브랜치)
+
+`addons/baseline/` 신설. **머지 = 배포**다(root App 이 `automated.selfHeal`).
+
+| 대상 | 핀 | 근거 |
+|---|---|---|
+| `aws-load-balancer-controller` | **3.5.0** | `index.yaml` 전수 80개 semver 정렬 최신. chart `kubeVersion` 제약 없음 |
+| `karpenter` (OCI) | **1.14.0** | ECR Public 태그 2,317개 + 호환성 매트릭스 원문 `1.35 → >= 1.9` |
+
+⚠️ **`30 §2.2` 의 PoC 핀(`3.4.2`·`1.13.0`)은 쓰지 않았다.** 값이 아니라 *"실측해서 핀한다"* 는
+원칙이 승계 대상이다.
+
+**egress canary 로 먼저 확인했다**(`syncPolicy` 없음 = 비교만, 판정 후 삭제 — 배포 0):
+
+| 호스트 | revision | rendered |
+|---|---|---|
+| `aws.github.io/eks-charts` | 3.5.0 | 17 |
+| `public.ecr.aws/karpenter` (OCI) | 1.14.0 | 18 |
+| `argoproj.github.io/argo-helm` | 10.3.0 | 55 (자기 관리용 — **이번 증분 아님**) |
+
+> ### 🔴 **이 증분에서 잡힌 함정 3개 — 설계를 그대로 베꼈으면 전부 밟았다**
+>
+> ① **Karpenter 를 `karpenter` ns 에 배포하면 안 된다.** Pod Identity association 이
+> **`kube-system`/`karpenter`** 로 잡혀 있다(upstream `terraform-aws-modules/eks//modules/karpenter`
+> v21.24.1 기본값). Karpenter 공식 관례를 따르면 **컨트롤러가 AWS 자격증명을 못 받는다.**
+>
+> ② **NodePool 은 `arm64` 다.** 이 클러스터는 `AL2023_ARM_64_STANDARD`·t4g.medium(Graviton)인데
+> `30 §2.2` 스펙은 **PoC 의 x86 기준으로 `amd64`** 라고 적혀 있다.
+>
+> ③ **rendered 0 + `ComparisonError` 가 egress 실패를 뜻하지 않는다.** Karpenter 첫 canary 가
+> 정확히 그 형태였고 원인은 `settings.clusterName` 누락이었다. **1차 신호는 `revision` 해석 여부**다
+> (`30 §2.9` 판독법). 오독했다면 *"못 나가니 미러링하자"* 로 갔을 것이다.
+
+**가드레일 개방** — `clusterResourceWhitelist` 는 canary 의 `status.resources` 에서
+namespace 없는 항목만 추린 **실측 목록**이다.
+
+| addon | cluster-scoped kind |
+|---|---|
+| ALBC | CRD · ClusterRole · ClusterRoleBinding · Validating/MutatingWebhookConfiguration (**5종**) |
+| Karpenter 컨트롤러 | CRD · ClusterRole · ClusterRoleBinding — ⭐ **ALBC 와 완전 중복이라 추가 0** |
+| Karpenter CR | `karpenter.sh/NodePool` · `karpenter.k8s.aws/EC2NodeClass` |
+
+⛔ `karpenter.sh/NodeClaim` 은 **넣지 않았다** — Karpenter 컨트롤러가 만드는 중간 리소스이고
+ArgoCD 가 배포하지 않는다. 틀렸다면 신호는 `resource not permitted in project` 로 명확하다.
+
+`root-app.yaml` 이 저장소 루트를 훑으므로 **`addons/baseline/` 이 늘어도 그 파일은 바뀌지 않는다.**
+이번에 `exclude` 만 한 줄 늘었다(위 로컬 차트 상자).
 
 **실물 좌표** — 매니페스트에 박힌 환경 고유값의 출처(전부 2026-08-07 실측):
 

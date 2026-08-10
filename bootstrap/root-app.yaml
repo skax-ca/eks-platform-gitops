@@ -32,9 +32,13 @@ spec:
       #     cluster-secret.yaml 은 제외 대상이 아니라 그대로 recurse(클러스터 등록 매니페스트).
       #   - bootstrap/argocd-values.yaml: ArgoCD 자신의 helm values(23 §2.1 자기 관리의 SSOT).
       #     ⚠️ 빼먹으면 root App 이 이것을 매니페스트로 오인해 sync 가 깨진다.
-      #   - 로컬 helm 차트(Chart.yaml + {{ }} 템플릿)를 추가하면 그 경로도 여기 제외한다 —
-      #     recurse 가 템플릿을 매니페스트로 오인하면 sync 가 깨진다(30 §2.2).
-      exclude: '{clusters/**/values.yaml,bootstrap/argocd-values.yaml}'
+      #   - addons/karpenter/nodepool/**: 로컬 helm 차트(Chart.yaml + {{ }} 템플릿).
+      #     ⚠️ 위 줄이 예고한 경우가 실제로 왔다(2026-08-10, ALBC·Karpenter 증분).
+      #     이 차트는 addons/baseline/karpenter.yaml 의 ②ApplicationSet 이 소싱한다 —
+      #     root-app 이 같은 파일을 매니페스트로도 읽으면 {{ }} 가 그대로 apply 돼 sync 가 깨진다.
+      #     ⛔ addons/baseline/*.yaml 은 제외 대상이 **아니다** — 그건 진짜 매니페스트
+      #        (ApplicationSet)이고 root-app 이 흡수해야 App-of-Apps 가 성립한다.
+      exclude: '{clusters/**/values.yaml,bootstrap/argocd-values.yaml,addons/karpenter/nodepool/**}'
 
   destination:
     # ⚠️ projects/platform.yaml 의 destinations 와 같은 값이어야 한다.

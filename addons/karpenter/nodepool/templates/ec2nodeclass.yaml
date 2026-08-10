@@ -1,0 +1,27 @@
+{{- $clusterName := required "clusterName 이 비어 있다 — ApplicationSet 이 cluster generator 의 {{name}} 으로 주입한다" .Values.clusterName -}}
+{{- $nodeRole := required "nodeRole 이 비어 있다 — cluster Secret 의 karpenterNodeRole 라벨에서 온다" .Values.nodeRole -}}
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+  annotations:
+    kubernetes.io/description: >-
+      플랫폼 baseline EC2NodeClass. subnet·SG 는 Terraform 이 붙인 karpenter.sh/discovery 태그로
+      찾는다 — 태그가 없으면 selector 가 빈 결과를 내고 노드 프로비저닝이 실패한다.
+spec:
+  # 🔑 이 값만 클러스터명에서 파생되지 않는다(26자 hash 접미). 그래서 cluster Secret 라벨이 필요하다.
+  #    instance profile 은 Karpenter v1 이 이 role 로부터 자체 생성한다 — 우리가 만들지 않는다.
+  role: {{ $nodeRole | quote }}
+
+  amiSelectorTerms:
+    - alias: {{ .Values.amiAlias }}
+
+  # ⚠️ subnet 태그는 소비자의 VPC 모듈이, SG 태그는 modules/eks-cluster 가 부여한다
+  #    (enable_karpenter 일 때 node_security_group_tags — 20 §5.2 에서 계약으로 승격).
+  #    둘 중 하나라도 없으면 **증상이 "노드가 안 뜬다"로만 나타난다.**
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: {{ $clusterName | quote }}
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: {{ $clusterName | quote }}
