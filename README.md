@@ -578,7 +578,43 @@ whitelist 대상이 아니고, 뒤집으면 **웹훅이 잘못돼도 Application
 
 ---
 
-### 🚧 증분 ②-b·③-b — `OutOfSync` 고착 해소 (2026-08-11) · **매니페스트 변경 없이 diff 만 바꾼다**
+### 🔶 증분 ②-b·③-b — `OutOfSync` 고착 해소 (2026-08-11, **머지 완료** — PR #6 `3a66228`) · **③만 해소, ②는 원인이 달랐다**
+
+> ## 🔴 **판정: 2/3 성공. 반증 조건이 실제로 발동했다**
+>
+> | 대상 | 결과 |
+> |---|---|
+> | `kyverno` · `kyverno-policies` | ✅ **`Synced Healthy`** — CRD 11 + ClusterPolicy 11 해소 |
+> | `argocd` | 🔴 **`OutOfSync` 그대로(37개 전부)** — **원인이 diff 전략이 아니었다** |
+> | 파드 재시작 | ✅ **0회** (`startTime` 2026-08-07 그대로) |
+> | 다른 앱 + root-app | ✅ 무영향 |
+>
+> ### 🔴 세 번째 정정 — ②의 원인은 **ArgoCD 자신의 `tracking-id`** 다
+>
+> `argocd app diff argocd --core` 로 **실제 diff 를 처음 열었다.** 37개의 차이는 **전부 한 줄**:
+> `> argocd.argoproj.io/tracking-id: argocd:/ConfigMap:argocd/argocd-cm`.
+> **`meta.helm.sh` 는 0회 등장한다.**
+> ⭐ 대조군이 증명한다 — kyverno 의 `ClusterPolicy` live 에는 tracking-id 가 **있고**(ArgoCD 가 apply 했다),
+> `argocd-cm` 에는 **없다**(한 번도 sync 된 적이 없다).
+> ⇒ **sync 를 한 번 해야만 사라진다** = **PR-②b** 가 소유한다. `bootstrap/argocd-app.yaml` 의
+> 애노테이션은 **철회했다**(PR #7).
+>
+> ### ⭐ 그런데 이것이 이 증분이 얻은 가장 값진 결과다
+>
+> 37개에서 **유일한 차이가 ArgoCD 자신의 추적 애노테이션**이라는 것은 **흡수해도 실질 변경이 0**
+> 이라는 뜻이다. *"37개 전부 OutOfSync"* 를 위험으로 읽었지만 실제로는 **흡수가 안전하다는 증거**였다.
+> 🔑 **숫자를 읽고 내용을 안 읽으면 정반대로 해석된다.**
+> ⇒ PR-②b 가 할 일이 특정됐다: **애노테이션 37개 추가, 그 외 0.** pod template 을 건드리지 않으므로
+> **재시작이 없어야 한다.**
+>
+> ### ⚠️ 운영 사실 — 애노테이션만으로는 재계산되지 않는다
+>
+> 애노테이션이 도착한 뒤에도 셋 다 `OutOfSync` 였고, `argocd.argoproj.io/refresh=hard` 를 넣자
+> kyverno 둘이 `Synced` 가 됐다. ⇒ **diff 전략을 바꾸는 증분에는 hard refresh 를 판정 절차에 넣는다.**
+
+---
+
+#### (착수 시점 기록 — 아래는 판정 전에 쓴 것이다)
 
 설계 SSOT: 모듈 repo **§2.10.6 (D-SSDIFF)**. 증분 ②③ 이 배포는 성공했는데
 **59개 리소스가 영구 `OutOfSync`** 로 남은 것을 닫는다(② 37 · ③ CRD 11 · ③ ClusterPolicy 11).
