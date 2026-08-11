@@ -691,7 +691,32 @@ diff 를 먼저 정상화해야 그 sync 가 무엇을 하려는지 읽을 수 �
 
 ---
 
-### 🚧 PR-②b — ArgoCD 자기 관리 **2단계: `automated` 를 켠다** (2026-08-11)
+### ✅ PR-②b — ArgoCD 자기 관리 **2단계: `automated` 를 켠다** (2026-08-11, **머지·배포 완료** — PR #8 `45f1db2`)
+
+> ## ✅ **판정 전 항목 통과 — 그리고 ⭐ 8개 Application 이 처음으로 전부 `Synced Healthy` 다**
+>
+> | # | 항목 | 결과 |
+> |---|---|---|
+> | 1 | `Application/argocd` | ✅ **`Synced Healthy`** |
+> | 2 | 🔴 파드 재시작 | ✅ **0회** — `startTime` **2026-08-07 그대로**. 새로 뜬 건 PreSync Job 파드뿐 |
+> | 3 | `argocd-secret` | ✅ data 5키 유지 |
+> | 4 | `Job/argocd-redis-secret-init` | ✅ `SuccessCriteriaMet` (위험 2 예측대로) |
+> | 5 | field manager | ✅ `argocd-controller`(Apply) 추가 |
+> | 6 | 다른 앱 + root-app | ✅ 무영향 |
+>
+> ### ⭐ 예측이 그대로 맞았다
+> `--force-conflicts` dry-run 이 *"pod template 전부 IDENTICAL"* 이라 한 그대로 **재시작 0**.
+> 🔑 **배포 전에 답을 알고 들어갔기 때문에 판정은 확인이지 발견이 아니었다.** 설계가 가장 무서워한
+> 단계(*"적용 대상이 controller 자신"*)가 실제로는 **가장 조용했다** — 무서움을 없앤 건 신중함이 아니라 **측정**이다.
+>
+> ### 📌 `helm` 매니저는 사라지지 않는다. **공존한다**
+> 실물: `[{argocd-controller, Apply}, {helm, Update}, {kube-controller-manager, Update/status}]`.
+> SSA force-conflicts 는 **우리가 선언한 필드의 소유권만** 가져온다.
+> ⇒ **흡수는 삭제가 아니라 소유권 이전**이고, 그래서 되돌릴 수 있다. ⚠️ `prune: true` 는 여전히 안 켠다.
+
+---
+
+#### (착수 시점 기록 — 아래는 판정 전에 쓴 것이다)
 
 설계 SSOT: 모듈 repo **§2.10.8**. `23 §2.1` 의 *"seed 1회 + 자기 관리"* 3단계 중 **마지막 칸**이다.
 이 PR 이 머지되면 ArgoCD 의 SSOT 는 helm 릴리스가 아니라 **완전히 이 저장소**가 된다.
