@@ -56,6 +56,7 @@ Application / ApplicationSet / AppProject 자체는 **양쪽이 동일**하다 �
 ```
 bootstrap/root-app.yaml      # App-of-Apps root — seed 대상. 이후 자기 자신을 흡수
 bootstrap/argocd-values.yaml # ArgoCD 자신의 helm values (23 §2.1). root App 훑기에서 제외됨
+bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application (증분 ②). ⬆ 위 values 를 $values 로 읽는다
 bootstrap/argocd-seed.sh     # ⬅ VENDORED — seed 실행 스크립트. SSOT 는 모듈 repo (아래 절)
 clusters/<env>/<cluster>/    # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개 (O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
@@ -138,9 +139,15 @@ addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root Ap
 > **자기 점검 한 줄** — 의도 밖 파일이 마커를 물고 있지 않은지:
 > ```bash
 > grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --include='*.json' . \
->   | grep -v '^./addons/karpenter/nodepool/'
+>   | grep -v 'addons/karpenter/nodepool/'
 > ```
 > 출력이 있으면 그 파일은 **조용히 스캔에서 빠지고 있다.**
+>
+> > 🔴 **2026-08-11 정정 — 필터에서 `^./` 앵커를 뺐다.** `grep -rl … .` 의 출력에 `./` 접두가
+> > 붙는지는 **환경에 따라 다르다**(래퍼 함수·구현체마다 갈린다. 실측으로 확인했다).
+> > 앵커가 있으면 그런 환경에서 **정상인데도 4줄이 출력된다.**
+> > 🔑 **거짓 경보를 내는 점검은 곧 무시당한다** — 점검 장치의 결함은 점검 대상의 결함만큼 나쁘다.
+> > 경로 조각 `addons/karpenter/nodepool/` 만으로도 충분히 특정된다.
 >
 > ℹ️ 기존 `exclude` 2개(`clusters/**/values.yaml`·`bootstrap/argocd-values.yaml`)는 **그대로 둔다** —
 > 동작 중인 것을 건드리지 않는다. **늘리지만 않는다.**
@@ -297,7 +304,12 @@ bootstrap/argocd-seed.sh                                 # 2026-08-10 vendoring 
 ⛔ **남은 완료 조건 1건** — 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제(`23 §2.3`).
 아직 하지 않았다. **선택이 아니라 완료 조건**이다.
 
-### 🚧 addon 증분 ① — ALBC + Karpenter (2026-08-10, 미머지 브랜치)
+### ✅ addon 증분 ① — ALBC + Karpenter (2026-08-10, **머지·배포 완료**)
+
+> 🔴 **이 제목을 2026-08-11 에 고쳤다** — PR #1 머지(`10083ef`) + 복구 2회(`4dd4ace`·`28cefaf`)로
+> **Application 3개 전부 `Synced Healthy`** 인데 *"미머지 브랜치"* 라고 적혀 있었다.
+> 지난 세션이 *"문서 결함이 코드 결함보다 많았다"* 고 기록한 그 유형이다.
+> 🔑 **상태를 제목에 쓰면 상태가 변할 때마다 제목이 낡는다.**
 
 `addons/baseline/` 신설. **머지 = 배포**다(root App 이 `automated.selfHeal`).
 
@@ -369,3 +381,57 @@ ArgoCD 가 배포하지 않는다. 틀렸다면 신호는 `resource not permitte
 2. ✅ **해소** — GitHub App 설치 범위. installation token 으로 `GET /installation/repositories` 를
    직접 조회해 **`total_count=1` · 이 저장소 하나**임을 확인했다(2026-08-07).
    ⛔ 이 범위를 넓히지 않는다 — 모듈 저장소를 넣으면 ArgoCD 가 모듈 소스까지 읽는다(`40 §2.5`).
+
+---
+
+### 🚧 증분 ② — ArgoCD 자기 관리 (2026-08-11) · **1단계 = 비교만**
+
+설계 SSOT: 모듈 repo `docs/design/30-gitops-repo.md` **§2.10.1 (D-ARGOCD-ADOPT)**.
+`23 §2.1` 이 정한 *"seed 1회 + 자기 관리"* 3단계 중 **2단계(흡수)** 를 실물로 만든다.
+
+| 파일 | 변경 |
+|---|---|
+| `bootstrap/argocd-app.yaml` | 🆕 Application(**ApplicationSet 아님**) · multi-source · `releaseName: argocd` · **`automated` 없음** |
+| `projects/platform.yaml` | `sourceRepos` 에 `https://argoproj.github.io/argo-helm` 추가 |
+| `clusterResourceWhitelist` | **변경 없음** — 렌더 실측상 CRD 3 · ClusterRole 2 · ClusterRoleBinding 2 뿐이고 전부 기존 |
+
+> ## ⭐ **머지해도 아무것도 배포되지 않는다 — 이번 PR 의 핵심 성질이다**
+>
+> `syncPolicy.automated` 를 넣지 않았으므로 이 Application 은 **비교만 한다.**
+> 증분 ① 의 *"머지 = 배포"* 와 **다르다.** 흡수 대상이 `application-controller` 자신이라,
+> diff 를 사람이 읽기 전에 자동 적용시키지 않는다.
+> ⇒ `automated` 는 **2단계 PR** 에서 붙인다.
+
+**1단계에서 읽을 것 3건** (로컬 `helm template` 으로 미리 특정했다 — *"무엇이 나올지 알고 본다"*):
+
+```bash
+argocd app get argocd -n argocd        # Synced/OutOfSync · conditions
+argocd app diff argocd                 # ⬅ 이것이 판정의 본체
+```
+
+| # | 지점 | 기대 | 위험 |
+|---|---|---|---|
+| **1** | 🔴 `Secret/argocd-secret` | 차트가 **`data` 없이** 렌더한다(메타데이터 + `type: Opaque`). argocd-server 가 런타임에 **admin 비밀번호 해시·`server.secretkey`·TLS** 를 채우는 자리 | 잘못 적용하면 **관리자 자격증명과 세션 키가 날아간다**. `ServerSideApply=true` 가 막는다 — SSA 는 선언한 필드만 소유한다 |
+| **2** | helm hook 4개 `argocd-redis-secret-init` | ArgoCD 가 `PreSync` 훅으로 번역한다 ⇒ **sync 마다 Job 이 하나 뜬다** | 놀랄 일이지 사고가 아니다 — **정상** |
+| **3** | 리소스 44개의 이름 | 전부 `argocd-*` — release 이름 `argocd` 에서 파생 | 아래 ⭐ |
+
+> ### ⭐ **release 이름이 어긋나면 흡수가 아니라 병렬 설치다**
+>
+> `argocd-seed.sh` 의 `ARGOCD_RELEASE` 기본값이 **`argocd`** 이고(`:137`), ArgoCD 는 helm source 의
+> release 이름을 **Application 이름에서** 가져온다. Application 을 `argocd-self` 로 지었다면
+> `argocd-self-server` 같은 **새 리소스 44개**가 생긴다.
+> ⇒ 이름을 `argocd` 로 하고 그 위에 **`helm.releaseName: argocd` 를 명시**했다.
+> ⚠️ 중복처럼 보이나 죽은 설정이 아니다 — **이름을 바꾸는 순간 조용히 깨지는 결합**을 값으로 고정한다.
+
+> ### 🔴 **`prune` 은 2단계에서도 켜지 않는다**
+>
+> root App 과 같은 이유에 더해, 이 Application 이 소유하지 않은 두 Secret 이 `argocd` ns 에 산다:
+> - `sh.helm.release.v1.argocd.v1` — seed 의 helm 릴리스 기록. **지우지 않는다**(고치는 것도 위험이다)
+> - `argocd-repo-gitops` — GitHub App private key. **자기소멸 원칙의 의도된 예외**(위 seed 절)
+
+⛔ **`ignoreDifferences` 를 미리 넣지 않았다.** 필요한지는 **1단계 diff 가 답한다** —
+필요 없는데 넣으면 죽은 설정이고, 필요하면 그때 `{kind: Secret, name: argocd-secret,
+jsonPointers: ["/data"]}` 를 **근거와 함께** 넣는다.
+
+⚠️ **차트는 `10.3.0` 그대로다.** 흡수와 업그레이드를 같은 커밋에 넣지 않는다 —
+실패했을 때 *"흡수가 문제인가 새 차트가 문제인가"* 를 가를 수 없다.
