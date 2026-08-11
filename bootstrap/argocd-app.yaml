@@ -32,6 +32,27 @@ metadata:
   namespace: argocd
   # ⛔ finalizer 를 넣지 않는다 — root-app 과 같은 이유. 이 Application 을 지울 때 ArgoCD 자신이
   #    cascade 삭제되면 seed 를 처음부터 다시 밟아야 한다.
+  annotations:
+    # 🔴 **D-SSDIFF** (30 §2.10.6) — 흡수 직후 37개 리소스 **전부**가 영구 `OutOfSync` 였다.
+    #    원인은 helm 이 소유한 `meta.helm.sh/release-{name,namespace}` 애노테이션이다:
+    #    `helm install` 이 붙이고 `helm template`(= ArgoCD 의 렌더)은 안 붙인다.
+    #
+    #    🔑 **`ServerSideApply=true` 로는 안 풀린다 — 그것은 *적용* 만 바꾸고 *diff* 는 안 바꾼다.**
+    #       ArgoCD 기본 diff 는 클라이언트 측이라 "우리가 선언하지 않은 필드"가 차이로 잡힌다.
+    #       ServerSideDiff 는 SSA dry-run 으로 predicted 를 얻으므로 그 필드는 **live 를 따른다.**
+    #
+    #    ✅ 실측(2026-08-11, `--dry-run=server`): 애노테이션을 뺀 desired 로 dry-run 하면 predicted 에
+    #       `meta.helm.sh/*` 가 **보존된다**. `Secret/argocd-secret` 의 data 5키도 마찬가지다
+    #       ⇒ §2.10.1 위험 1(자격증명 소실)이 diff 관점에서도 일어나지 않는다.
+    #
+    #    ⛔ `IncludeMutationWebhook` 을 켜지 않는다 — 이 고착에 mutation webhook 은 **관여하지 않는다**
+    #       (§2.10.6 이 §2.10.5 의 귀인을 정정했다). 켜면 웹훅 변형이 diff 에 들어와 새 고착을 만든다.
+    #    ⛔ 전역 스위치(`controller.diff.server.side`)를 쓰지 않는다 — controller 재시작이 필요하고
+    #       현재 `Synced` 인 앱들의 diff 까지 동시에 바꿔 **KEDA 대조군을 잃는다**. 승격 조건은 §2.10.6.
+    #
+    #    ⚠️ 대가: 우리가 **선언하지 않은** 필드의 변경은 이제 drift 로 보고되지 않는다.
+    #       그래도 택한다 — 항상 `OutOfSync` 이면 진짜 drift 신호가 죽는다.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: platform
 
