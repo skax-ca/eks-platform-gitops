@@ -32,8 +32,11 @@ spec:
     # ── Karpenter 증분 (2026-08-10) ──
     # ⚠️ OCI registry 라 scheme 을 쓰지 않는다. Repository Secret·enableOCI 는 필요 없었다(실측).
     - public.ecr.aws/karpenter
-    # ⏳ 아직 넣지 않는다 — https://argoproj.github.io/argo-helm (ArgoCD 자기 관리, 23 §2.1).
-    #    egress 는 이미 확인됐지만(canary rendered 55) 그건 **별도 증분**이다.
+    # ── ArgoCD 자기 관리 = 증분 ② (2026-08-11, 30 §2.10.1 D-ARGOCD-ADOPT) ──
+    # ⭐ ArgoCD 가 **자기 자신의 차트**를 읽는다. 이 줄이 없으면 bootstrap/argocd-app.yaml 이
+    #    InvalidSpecError 로 sync 조차 서지 않는다.
+    # egress 실측 완료(30 §2.9 canary): revision 10.3.0 · rendered 55 · conditions 없음.
+    - https://argoproj.github.io/argo-helm
 
   # 등록된 클러스터만 허용. 새 클러스터 등록 시 여기에도 추가한다.
   # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
