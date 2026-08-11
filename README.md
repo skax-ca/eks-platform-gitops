@@ -385,7 +385,11 @@ ArgoCD 가 배포하지 않는다. 틀렸다면 신호는 `resource not permitte
 
 ---
 
-### 🚧 증분 ② — ArgoCD 자기 관리 (2026-08-11) · **1단계 = 비교만**
+### ✅ 증분 ② — ArgoCD 자기 관리 (2026-08-11, **머지·배포 완료** — PR #2 `3cecd80`) · **1단계 = 비교만**
+
+> ⚠️ **아래 본문은 착수 시점에 쓴 것이다.** 판정 결과는 모듈 repo **§2.10.5** 가 소유한다 —
+> `Application/argocd` 생성 · **파드 재시작 0** · 그러나 **37개 리소스가 영구 `OutOfSync`** 였다.
+> 그 고착은 **증분 ②-b·③-b**(이 문서 맨 아래)가 닫는다.
 
 설계 SSOT: 모듈 repo `docs/design/30-gitops-repo.md` **§2.10.1 (D-ARGOCD-ADOPT)**.
 `23 §2.1` 이 정한 *"seed 1회 + 자기 관리"* 3단계 중 **2단계(흡수)** 를 실물로 만든다.
@@ -439,7 +443,11 @@ jsonPointers: ["/data"]}` 를 **근거와 함께** 넣는다.
 
 ---
 
-### 🚧 증분 ③ — Kyverno + PSS 정책 (2026-08-11) · **첫 전용 네임스페이스 addon**
+### ✅ 증분 ③ — Kyverno + PSS 정책 (2026-08-11, **머지·배포 완료** — PR #5 `b13e9ea`) · **첫 전용 네임스페이스 addon**
+
+> ⚠️ PR 번호가 **#3 → #5** 로 바뀌었다 — #2 를 `--delete-branch` 로 머지하자 자식 PR 이 닫혔다
+> (절차 교훈은 모듈 repo §2.10.5). 판정: 4 컨트롤러 Running · ClusterPolicy 11개 `Ignore`/`Audit`
+> · 그러나 **CRD 11개 + ClusterPolicy 11개가 영구 `OutOfSync`** → **증분 ③-b** 가 닫는다.
 
 설계 SSOT: 모듈 repo **§2.10.2 (D-KYVERNO)**. 분류는 **①baseline**(사용자 결정) —
 *정책 엔진은 가드레일이고, **옵트인 가드레일은 가드레일이 아니다.***
@@ -511,7 +519,11 @@ whitelist 대상이 아니고, 뒤집으면 **웹훅이 잘못돼도 Application
 
 ---
 
-### 🚧 증분 ④ — KEDA (2026-08-11) · **`addons/catalog/` 를 처음 켠다**
+### ✅ 증분 ④ — KEDA (2026-08-11, **머지·배포 완료** — PR #4 `1bb27e9`) · **`addons/catalog/` 를 처음 켠다**
+
+> ⭐ 판정: 파드 3개 Running · `APIService` **Available** · **혼자 `Synced Healthy`**.
+> 🔑 **그 "혼자"가 자산이 됐다** — 같은 옵션(`ServerSideApply=true`)인데 ②③만 `OutOfSync` 라
+> *"ArgoCD 설정이 잘못됐다"* 가설이 배제됐다. **증분을 나눈 덕에 대조군이 생겼다**(모듈 repo §2.10.5).
 
 설계 SSOT: 모듈 repo **§2.10.3 (D-KEDA-CATALOG)**. 분류는 **②opt-in 카탈로그** —
 `30 §2.4` 가 2026-07-20 에 이미 그렇게 분류해 두었고(*"Kafka/Redis operator·**KEDA**·service mesh"*),
@@ -563,3 +575,78 @@ whitelist 대상이 아니고, 뒤집으면 **웹훅이 잘못돼도 Application
 | 4 | 파드 3개 Running (`ghcr.io` 이미지 pull — 증분 ③과 같은 새 축) |
 
 ✅ arm64 확인 완료 — 3개 이미지 전부 manifest index 에 `linux/arm64`.
+
+---
+
+### 🚧 증분 ②-b·③-b — `OutOfSync` 고착 해소 (2026-08-11) · **매니페스트 변경 없이 diff 만 바꾼다**
+
+설계 SSOT: 모듈 repo **§2.10.6 (D-SSDIFF)**. 증분 ②③ 이 배포는 성공했는데
+**59개 리소스가 영구 `OutOfSync`** 로 남은 것을 닫는다(② 37 · ③ CRD 11 · ③ ClusterPolicy 11).
+
+> ## 🔴 **고치는 대상은 클러스터가 아니라 신호다**
+>
+> 세 Application 모두 `phase=Succeeded` 이고 리소스는 정상 동작한다. **기능적으로는 문제가 없다.**
+> 그런데 **항상 `OutOfSync` 이면 "`OutOfSync` = 문제"라는 신호가 죽는다** — 진짜 drift 가 들어와도
+> 구분할 수 없다. 🔑 이 저장소에서 **같은 범주가 이미 세 번째**다
+> (`^./` 앵커가 낸 거짓 경보 · CI 캐시 판정 기준 · 이것).
+> ⛔ **거짓 신호를 내는 장치는 곧 무시당한다 — 점검 장치의 결함은 점검 대상의 결함만큼 나쁘다.**
+
+#### 변경 — 애노테이션 3줄이 전부다
+
+| 파일 | 대상 |
+|---|---|
+| `bootstrap/argocd-app.yaml` | `Application/argocd` |
+| `addons/baseline/kyverno.yaml` | ApplicationSet `kyverno` (template) |
+| `addons/baseline/kyverno.yaml` | ApplicationSet `kyverno-policies` (template) |
+
+전부 `argocd.argoproj.io/compare-options: ServerSideDiff=true`.
+**차트 버전·values·syncOptions·AppProject 델타 0.** 새로 만들어지는 리소스도 없다.
+
+#### 🔴 이 증분이 앞 증분의 **원인 진단 2건을 정정한다**
+
+§2.10.5 는 세 고착을 *"셋 다 다른 매니저가 소유"* 로 묶었는데, `--show-managed-fields` 로 열어 보니
+뒤 둘은 **소유자가 아예 없는 필드**였다.
+
+| 대상 | 앞 증분의 진단 | 실측 |
+|---|---|---|
+| ② `argocd-cm` 등 37개 | `helm` 소유 애노테이션 | ✅ 맞다 (매니저가 `helm` **하나뿐**) |
+| ③ CRD 11개 | *"`kube-apiserver` 가 채운다"* | 🔴 그 매니저는 **`status` 서브리소스만** 소유. 실제 차이는 **`spec.conversion`**(무소유) |
+| ③ ClusterPolicy 11개 | *"kyverno 자기 웹훅이 주입"* | 🔴 `kyverno` 도 **`status` 만** 소유. 실제 차이는 **`spec.admission`·`emitWarning`** = CRD 스키마 `default:` |
+
+⇒ 원인은 셋이 아니라 **둘**이고, **mutation webhook 은 관여하지 않는다.**
+⛔ 그래서 `IncludeMutationWebhook=true` 를 **넣지 않는다** — 넣으면 웹훅 변형까지 diff 에 들어와
+새 고착을 만든다. 🔑 **원인을 틀리게 알아도 옵션은 맞을 수 있다. 그러면 다음번에 같은 오진을 반복한다.**
+
+#### ✅ 배포 전에 이미 확인한 것 — SSA dry-run 은 비파괴다
+
+`kubectl apply --server-side --dry-run=server --field-manager=argocd-controller` 로
+**ServerSideDiff 가 하는 계산을 그대로** 돌렸다(클러스터를 바꾸지 않는다).
+
+| 대상 | desired 에서 뺀 것 | predicted vs live |
+|---|---|---|
+| `ClusterPolicy/disallow-host-path` | `spec.admission`·`emitWarning` | **IDENTICAL** |
+| `CRD/mutatingpolicies.policies.kyverno.io` | `spec.conversion` | **IDENTICAL** |
+| `ConfigMap/argocd-cm` | 애노테이션 전부 | `meta.helm.sh/*` **보존** |
+| 🔴 `Secret/argocd-secret` | `data` 전체 | 5키 **전부 보존** |
+
+⭐ 마지막 줄이 §2.10.1 **위험 1**(자격증명 소실)을 diff 축에서도 닫는다.
+
+#### ⚠️ 대가 — 감지 범위가 좁아진다
+
+ServerSideDiff 는 *우리가 선언하지 않은* 필드의 변경을 **더 이상 drift 로 보고하지 않는다.**
+바꾸는 것은 표시 방식이 아니라 **"무엇을 drift 로 볼 것인가"의 정의**다.
+그래도 택한다 — **좁지만 살아 있는 신호가, 넓지만 아무도 안 보는 신호보다 낫다.**
+
+#### apply 판정 항목 (머지 = 배포)
+
+| # | 보는 것 | 기대 |
+|---|---|---|
+| 1 | 세 Application | `Synced Healthy` |
+| 2 | **파드 재시작 0** | diff 전략은 apply 를 하지 않는다. `argocd` 앱은 `automated` 도 꺼져 있다 |
+| 3 | `Secret/argocd-secret` data 5키 | 유지 |
+| 4 | ALBC·Karpenter·NodePool·KEDA·root-app | **무영향** (애노테이션을 안 건드렸다) |
+| 5 | ⚠️ 반증 조건 | 하나라도 `OutOfSync` 로 남으면 **그 대상만** `ignoreDifferences` 로 보완하고 근거를 §2.10.6 에 적는다 |
+
+⛔ **`automated: {selfHeal: true}`(PR-②b 본편)는 이 증분에 넣지 않는다** — 켜면 37개 리소스에
+sync 가 걸리고(`Deployment` 4 · `StatefulSet` 1) **ArgoCD 가 자기 자신을 재시작**한다.
+diff 를 먼저 정상화해야 그 sync 가 무엇을 하려는지 읽을 수 있다.
