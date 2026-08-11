@@ -41,6 +41,10 @@ spec:
     # ⚠️ 컨트롤러(kyverno)와 정책(kyverno-policies) **두 차트가 같은 repo** 에 있다 ⇒ 줄은 하나다.
     #    후행 슬래시는 upstream 이 index.yaml 을 그렇게 서빙하는 형태 그대로다.
     - https://kyverno.github.io/kyverno/
+    # ── KEDA = 증분 ④ (2026-08-11, 30 §2.10.3 D-KEDA-CATALOG) ──
+    # ⭐ ②opt-in 카탈로그의 첫 항목이다. **가드레일은 분류와 무관하다** — baseline 이든 catalog 든
+    #    sourceRepos 에 등재되지 않으면 InvalidSpecError 다.
+    - https://kedacore.github.io/charts
 
   # 등록된 클러스터만 허용. 새 클러스터 등록 시 여기에도 추가한다.
   # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
@@ -96,6 +100,15 @@ spec:
     #    **웹훅이 잘못돼도 Application 은 Synced Healthy 로 보인다**(판정을 그것에만 의존하지 않는다).
     # 아래는 컨트롤러가 아니라 **우리가 배포하는 정책 CR** 이다(kyverno-policies 차트, 11개).
     - { group: kyverno.io, kind: ClusterPolicy }
+    # ── KEDA 증분 ④ (2026-08-11) ──
+    # 🔴 **이번 세 증분에서 유일하게 성격이 다른 리소스다.**
+    #    KEDA 가 v1beta1.external.metrics.k8s.io 를 등록한다 — 이것이 깨지면 **그 API 그룹 전체가 죽는다.**
+    #    ⚠️ 계층 1 의 metrics-server 는 v1beta1.metrics.k8s.io 라 **그룹이 달라 충돌하지 않는다**(실측).
+    #    ⚠️ 지금은 external.metrics 를 소비하는 것이 없어 무해하지만, HPA 가 쓰기 시작하면
+    #       **KEDA 장애 = HPA 장애**다 ⇒ 그때 가용성 요구를 다시 본다(현재 replicas: 1).
+    - { group: apiregistration.k8s.io, kind: APIService }
+    # ℹ️ KEDA 의 나머지 cluster-scoped(CRD 6 · ClusterRole 4 · CRB 5 ·
+    #    ValidatingWebhookConfiguration 1)는 전부 위 ALBC 항목과 겹친다 ⇒ 추가 0건(렌더 실측).
 
   # namespace 스코프는 전면 허용 — 플랫폼 계층은 관리자 tier 다.
   namespaceResourceWhitelist:
