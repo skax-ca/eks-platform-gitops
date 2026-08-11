@@ -435,3 +435,75 @@ jsonPointers: ["/data"]}` 를 **근거와 함께** 넣는다.
 
 ⚠️ **차트는 `10.3.0` 그대로다.** 흡수와 업그레이드를 같은 커밋에 넣지 않는다 —
 실패했을 때 *"흡수가 문제인가 새 차트가 문제인가"* 를 가를 수 없다.
+
+---
+
+### 🚧 증분 ③ — Kyverno + PSS 정책 (2026-08-11) · **첫 전용 네임스페이스 addon**
+
+설계 SSOT: 모듈 repo **§2.10.2 (D-KYVERNO)**. 분류는 **①baseline**(사용자 결정) —
+*정책 엔진은 가드레일이고, **옵트인 가드레일은 가드레일이 아니다.***
+
+| 차트 | 핀 | appVersion | 근거 |
+|---|---|---|---|
+| `kyverno` | **3.8.2** | `v1.18.2` | `index.yaml` 전수 263개 중 stable 79개 semver 정렬 최신. `kubeVersion >=1.25.0-0` ✅ |
+| `kyverno-policies` | **3.8.2** | `v1.18.2` | ⭐ **컨트롤러와 같은 번호로 함께 릴리스된다** ⇒ 스큐 판단 불필요. 올릴 땐 **둘 다** |
+
+구조는 **Karpenter 와 같다** — 파일 1개 · ApplicationSet 2개 · CRD 순서 때문에 wave 분리
+(컨트롤러 `0` → 정책 `5` + `SkipDryRunOnMissingResource`).
+
+> ## 🔴 **이 증분이 D-ADDON-NS 의 미판정 2건을 처음 실물로 만난다**
+>
+> **판정 ① — 자동 생성 Namespace 는 `clusterResourceWhitelist` 검사를 받는다.**
+> argo-cd `v3.5.0` 소스 판정: `CreateNamespace=true` 로 만들어지는 ns 가
+> **같은 sync task 목록에 append** 되고(`gitops-engine sync_context.go:846`) 목록 전체가
+> `permissionValidator` 를 거친다(`:904`). Namespace 는 `Namespaced=false` 라
+> `clusterResourceWhitelist` 로 판정된다(`controller/sync.go:657`).
+> ⚠️ **ns 가 이미 있으면 task 자체가 생기지 않아 검사도 없다**(`controller/sync_namespace.go`)
+> ⇒ 손으로 먼저 만들면 통과하고 **두 번째 클러스터에서만** 깨진다. **그래서 지금 연다.**
+>
+> **판정 ② — `managedNamespaceMetadata` 를 쓰지 않는다.** 공식 문서가
+> *"including the possibility to delete it, which Argo CD normally does not do"* 라고 못박는다.
+> `prune: true` 와 겹치면 **addon 제거가 네임스페이스째 지운다.**
+> ✅ 쓰지 않으므로 ns 는 추적 대상이 아니고 prune 대상도 아니다.
+
+> ## ⭐ **`failurePolicy` 를 `Fail`(차트 기본) → `Ignore` 로 바꾼 것이 유일한 값 변경이다**
+>
+> | 값 | 묻는 것 | 차트 기본 | 우리 값 |
+> |---|---|---|---|
+> | `validationFailureAction` | **정책을 위반했을 때** | `Audit` | `Audit` — **적지 않는다**(기본값과 같다) |
+> | `failurePolicy` | **웹훅에 닿지 못할 때** | `Fail` | 🔴 **`Ignore`** |
+>
+> **Audit + Fail 은 비정합이다.** 아무것도 막지 않기로 해 놓고 **Kyverno 가 죽으면 전부 막는다.**
+> ⭐ `background: true`(기본)라 웹훅을 놓쳐도 **백그라운드 스캔이 PolicyReport 를 만든다** —
+> 잃는 것은 *실시간성* 뿐이다.
+> ⚠️ **Enforce 로 전환할 때 `Fail` 로 함께 올린다.** 두 값은 **짝으로 움직인다.**
+
+> ### ⭐ **차트 기본 웹훅 제외가 ALBC·Karpenter 를 이미 지켜 준다**
+>
+> `ConfigMap/kyverno` 의 `webhooks.namespaceSelector` 가 **`kube-system`·`kyverno` 를 제외**한다
+> (실측). apiserver 가 그 ns 에 대해서는 Kyverno 를 **호출조차 하지 않는다.**
+> 🔑 D-ADDON-NS 의 예외 2개가 **무관한 방향에서** 값을 돌려줬다.
+>
+> 🔴 **그러나 `argocd` 는 제외 대상이 아니다.** 지금(Audit + `Ignore`)은 무해하지만
+> **Enforce + `Fail` 로 가면 순환 의존**이다 — Kyverno 장애 → ArgoCD 막힘 → Kyverno 를 고칠 수단 상실.
+> ⇒ Enforce 전환은 그 질문을 **먼저** 답한다. ⛔ 지금 미리 넣지 않는다(죽은 설정이 된다).
+
+**가드레일 개방** — `sourceRepos` +1(`kyverno.github.io/kyverno/`) ·
+`clusterResourceWhitelist` +2(`(core)/Namespace`, `kyverno.io/ClusterPolicy`).
+⭐ 컨트롤러의 cluster-scoped **47종**(CRD 22 · ClusterRole 17 · CRB 8)은 **추가 0건** —
+전부 ALBC 증분에서 이미 열렸다. 🔑 whitelist 는 **kind 단위**다.
+
+⚠️ **웹훅 설정은 렌더 결과에 없다** — Kyverno 가 런타임에 동적 등록한다. ArgoCD 가 소유하지 않으므로
+whitelist 대상이 아니고, 뒤집으면 **웹훅이 잘못돼도 Application 은 `Synced Healthy` 로 보인다.**
+
+**apply 판정 항목** (머지 = 배포다 — 이 증분은 `automated` 를 켠다)
+
+| # | 보는 것 |
+|---|---|
+| 1 | 🆕 **`ghcr.io` 이미지 pull** — 이미지가 `reg.kyverno.io`(= GHCR vanity 도메인, 401 realm 실측)에서 온다. 지금까지 addon 이미지는 **전부 `public.ecr.aws`** 였다. ⚠️ **canary 로 앞당길 수 없다**(canary 는 repo-server 의 차트 fetch 만 본다 — 이미지 pull 은 kubelet→NAT) |
+| 2 | Namespace `kyverno` 가 생겼는가 · whitelist 오류 없이 sync 됐는가 (판정 ①의 실증) |
+| 3 | ClusterPolicy 11개가 `Ready` 이고 `failurePolicy: Ignore` · `validate.failureAction: Audit` 인가 |
+| 4 | PolicyReport 가 생기는가 — 정책이 **실제로 무언가를 보고 있는지**의 증거 |
+| 5 | ⚠️ 기존 워크로드(ALBC·Karpenter·ArgoCD)가 **영향받지 않았는지** |
+
+✅ arm64 확인 완료(manifest index 에 `linux/arm64`) — 이 클러스터는 Graviton 이다.

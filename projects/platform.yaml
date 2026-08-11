@@ -37,6 +37,10 @@ spec:
     #    InvalidSpecError 로 sync 조차 서지 않는다.
     # egress 실측 완료(30 §2.9 canary): revision 10.3.0 · rendered 55 · conditions 없음.
     - https://argoproj.github.io/argo-helm
+    # ── Kyverno = 증분 ③ (2026-08-11, 30 §2.10.2 D-KYVERNO) ──
+    # ⚠️ 컨트롤러(kyverno)와 정책(kyverno-policies) **두 차트가 같은 repo** 에 있다 ⇒ 줄은 하나다.
+    #    후행 슬래시는 upstream 이 index.yaml 을 그렇게 서빙하는 형태 그대로다.
+    - https://kyverno.github.io/kyverno/
 
   # 등록된 클러스터만 허용. 새 클러스터 등록 시 여기에도 추가한다.
   # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
@@ -74,6 +78,24 @@ spec:
     #    컨트롤러가 NodePool 로부터 만드는 중간 리소스이고 **ArgoCD 가 배포하지 않는다.**
     #    최소권한이 원칙이므로 뺀다. ⚠️ 만약 틀렸다면 신호는 명확하다 —
     #    sync 시 "resource not permitted in project"。 그때 이 줄을 근거와 함께 추가한다.
+    # ── Kyverno 증분 ③ (2026-08-11) ──
+    # 🔴 **전용 ns addon 이 처음 들어오면서 Namespace 를 열어야 한다.**
+    #    CreateNamespace=true 로 자동 생성되는 Namespace 는 **이 목록의 검사를 받는다** —
+    #    argo-cd v3.5.0 소스 판정(30 §2.10.0 판정 ①): 그 ns 가 **같은 sync task 목록에 append** 되고
+    #    (gitops-engine sync_context.go:846) 목록 전체가 permissionValidator 를 거친다(:904).
+    #    Namespace 는 Namespaced=false 라 clusterResourceWhitelist 로 판정된다(controller/sync.go:657).
+    #    ⚠️ **ns 가 이미 있으면 task 자체가 생기지 않아 검사도 없다**(controller/sync_namespace.go) ⇒
+    #       손으로 먼저 만들면 이 줄 없이도 통과하고 **두 번째 클러스터에서만** 깨진다. 그래서 지금 연다.
+    #    ✅ ③(kyverno)·④(keda) 공용이다.
+    - { group: "", kind: Namespace }
+    # ⭐ 컨트롤러 차트의 cluster-scoped 47종(CRD 22 · ClusterRole 17 · ClusterRoleBinding 8)은
+    #    **전부 위 ALBC 항목과 겹친다 ⇒ 추가 0건**(로컬 렌더 실측 2026-08-11).
+    #    🔑 whitelist 는 **kind 단위**라 "차트가 크다"와 "목록이 커진다"는 다른 질문이다.
+    # ⚠️ Kyverno 의 ValidatingWebhookConfiguration 은 **렌더 결과에 없다** — 컨트롤러가 런타임에
+    #    동적 등록한다. ArgoCD 가 소유하지 않으므로 여기 넣을 것이 없고, 뒤집으면
+    #    **웹훅이 잘못돼도 Application 은 Synced Healthy 로 보인다**(판정을 그것에만 의존하지 않는다).
+    # 아래는 컨트롤러가 아니라 **우리가 배포하는 정책 CR** 이다(kyverno-policies 차트, 11개).
+    - { group: kyverno.io, kind: ClusterPolicy }
 
   # namespace 스코프는 전면 허용 — 플랫폼 계층은 관리자 tier 다.
   namespaceResourceWhitelist:
