@@ -60,7 +60,8 @@ bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application (증분 ②). �
 bootstrap/argocd-seed.sh     # ⬅ VENDORED — seed 실행 스크립트. SSOT 는 모듈 repo (아래 절)
 clusters/<env>/<cluster>/    # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개 (O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
-addons/baseline/             # ①baseline helm addon ApplicationSet — cluster generator 로 팬아웃
+addons/baseline/             # ①baseline helm addon ApplicationSet — 전 클러스터 팬아웃 (environment 라벨)
+addons/catalog/              # ②opt-in 카탈로그 — **구독한 클러스터만** (addon-<name> 라벨)
 addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root App 훑기에서 제외됨
 ```
 
@@ -507,3 +508,58 @@ whitelist 대상이 아니고, 뒤집으면 **웹훅이 잘못돼도 Application
 | 5 | ⚠️ 기존 워크로드(ALBC·Karpenter·ArgoCD)가 **영향받지 않았는지** |
 
 ✅ arm64 확인 완료(manifest index 에 `linux/arm64`) — 이 클러스터는 Graviton 이다.
+
+---
+
+### 🚧 증분 ④ — KEDA (2026-08-11) · **`addons/catalog/` 를 처음 켠다**
+
+설계 SSOT: 모듈 repo **§2.10.3 (D-KEDA-CATALOG)**. 분류는 **②opt-in 카탈로그** —
+`30 §2.4` 가 2026-07-20 에 이미 그렇게 분류해 두었고(*"Kafka/Redis operator·**KEDA**·service mesh"*),
+그 절이 *"경로만 명문화, 구현은 미룸"* 이라고 적은 것을 **이 증분이 실물로 만든다.**
+
+| 차트 | 핀 | appVersion | 근거 |
+|---|---|---|---|
+| `keda` | **2.20.2** | `2.20.2` | `index.yaml` 전수 78개 중 stable 72개 semver 정렬 최신. `kubeVersion >=v1.23.0-0` ✅ |
+
+> ## 🔀 **①baseline 과 갈리는 지점은 generator 의 `matchLabels` 하나뿐이다**
+>
+> | | matchLabels | 대상 |
+> |---|---|---|
+> | ① baseline | `{environment: dev}` | 전 클러스터 자동 |
+> | **② catalog** | **`{addon-keda: enabled}`** | **구독한 클러스터만** |
+>
+> 구독 = cluster Secret 에 라벨을 다는 것이다
+> (`clusters/dev/eks-ref-dev-an2-main-01/cluster-secret.yaml`).
+> 🔑 `30 §2.4` 의 *"플랫폼이 무엇을·어떤 버전으로 승인하고, 팀은 쓸지를 라벨로 옵트인"*
+> (**paved road**)이 실물에서 뜻하는 바가 이것이다.
+>
+> 🔴 **`30 §2.9` 의 *"cluster Secret 은 손대지 않는다"* 는 baseline 전제였다** — §2.10.3 이 정정했다.
+> **O(1) 은 유지된다**: 새 클러스터도 여전히 Secret 1개이고, 라벨이 하나 늘 뿐이다.
+> ⚠️ 라벨 값은 **문자열**이어야 한다 — k8s 라벨에 boolean 은 없다. `true` 가 아니라 `"enabled"`.
+
+> ### 🔴 **`APIService` — 이번 세 증분에서 유일하게 성격이 다른 리소스**
+>
+> KEDA 가 **`v1beta1.external.metrics.k8s.io`** 를 등록한다. 이것이 깨지면 **그 API 그룹 전체가 죽는다.**
+> - ⚠️ 계층 1 의 `metrics-server` 는 `v1beta1.metrics.k8s.io` 라 **그룹이 달라 충돌하지 않는다.**
+> - ⚠️ 지금은 `external.metrics` 를 소비하는 것이 없어 무해하지만, **HPA 가 쓰기 시작하면
+>   KEDA 장애 = HPA 장애**다 ⇒ 그때 가용성 요구를 다시 본다(현재 `replicas: 1`).
+
+**AWS 스케일러는 넣지 않았다**(사용자 결정) — in-cluster 트리거(cron·prometheus·kafka)만 쓴다.
+⇒ Pod Identity·IAM **0건** ⇒ ⭐ **이 증분이 계층 2 안에서 닫힌다**(모듈 repo `.tf` 도, 소비 repo apply 도 없다).
+⚠️ SQS·CloudWatch 요구가 생기면 `modules/eks-cluster/iam.tf` 에 `keda/keda-operator` association 을
+연다 — ALBC·external-dns 와 **같은 패턴**이라 새로 발명할 것이 없다. **가역적이다.**
+
+**가드레일 개방** — `sourceRepos` +1(`kedacore.github.io/charts`) ·
+`clusterResourceWhitelist` +1(`apiregistration.k8s.io/APIService`).
+나머지(CRD 6 · ClusterRole 4 · CRB 5 · ValidatingWebhookConfiguration 1)는 **전부 기존**이다.
+
+**apply 판정 항목**
+
+| # | 보는 것 |
+|---|---|
+| 1 | ⭐ **라벨 옵트인이 실제로 작동하는가** — 라벨이 있는 클러스터에만 Application 이 생겼는가. ②경로의 첫 실증이다 |
+| 2 | Namespace `keda` 생성 + whitelist 오류 없음 |
+| 3 | `APIService v1beta1.external.metrics.k8s.io` 가 `Available=True` 인가. ⚠️ `metrics-server` 가 **영향받지 않았는지** 함께 본다 |
+| 4 | 파드 3개 Running (`ghcr.io` 이미지 pull — 증분 ③과 같은 새 축) |
+
+✅ arm64 확인 완료 — 3개 이미지 전부 manifest index 에 `linux/arm64`.
