@@ -686,3 +686,59 @@ ServerSideDiff 는 *우리가 선언하지 않은* 필드의 변경을 **더 이
 ⛔ **`automated: {selfHeal: true}`(PR-②b 본편)는 이 증분에 넣지 않는다** — 켜면 37개 리소스에
 sync 가 걸리고(`Deployment` 4 · `StatefulSet` 1) **ArgoCD 가 자기 자신을 재시작**한다.
 diff 를 먼저 정상화해야 그 sync 가 무엇을 하려는지 읽을 수 있다.
+> ⚠️ **위 문장의 재시작 우려는 완화됐다** — 아래 PR-②b 절이 소유한다. 실측상 sync 는
+> 애노테이션만 붙이고 **pod template 을 건드리지 않는다.**
+
+---
+
+### 🚧 PR-②b — ArgoCD 자기 관리 **2단계: `automated` 를 켠다** (2026-08-11)
+
+설계 SSOT: 모듈 repo **§2.10.8**. `23 §2.1` 의 *"seed 1회 + 자기 관리"* 3단계 중 **마지막 칸**이다.
+이 PR 이 머지되면 ArgoCD 의 SSOT 는 helm 릴리스가 아니라 **완전히 이 저장소**가 된다.
+
+#### 변경 — `bootstrap/argocd-app.yaml` 한 곳
+
+```yaml
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false      # ⛔ 결정 5·§4 대로. helm 잔존물이 "저장소에 없는 리소스"가 된다
+```
+
+#### ✅ 배포 전에 답한 것 — 실측 3건
+
+| # | 질문 | 답 |
+|---|---|---|
+| 1 | sync 가 **무엇을** 바꾸나 | `argocd app diff --core`: 37개의 차이는 **전부 `tracking-id` 한 줄** ⇒ **실질 변경 0** |
+| 2 | SSA 가 `helm` 과 **충돌하나** | 🔴 **한다** — 실제 렌더본으로 2건(`env[NAMESPACE].valueFrom.fieldRef` · `NetworkPolicy.spec.ingress`). 둘 다 **atomic 구조체 + apiserver 기본값** |
+| 3 | 충돌이 sync 를 **막나** | ✅ **아니다** — 공식 문서상 `ServerSideApply=true` 는 `kubectl apply --server-side --force-conflicts` 로 실행된다 |
+
+> ## ⭐ **`argocd app diff` 는 깨끗한데 SSA 는 충돌한다**
+>
+> ArgoCD 의 diff 가 **기본값을 정규화해 지우기** 때문이다.
+> 🔑 **diff 가 깨끗한 것은 apply 가 충돌하지 않는다는 뜻이 아니다.** 둘은 다른 질문이다.
+
+✅ **`--force-conflicts` 예측**: pod template **5개 전부 IDENTICAL** · `NetworkPolicy.spec` **4개 전부
+IDENTICAL** · `argocd-secret` data **5키 보존** ⇒ 충돌 해소는 소유권이 `helm` → `argocd-controller` 로
+옮겨가는 것일 뿐 **값은 안 바뀐다.** ⭐ **그것이 흡수(adopt)의 정의 그 자체다.**
+
+#### ⛔ 넣지 않는 것 — 이름만 비슷한 세 축
+
+| 옵션 | 무엇인가 | 판단 |
+|---|---|---|
+| `ServerSideApply=true` | **apply 방식** (`--force-conflicts` 포함) | ✅ 1단계부터 있다 |
+| `Force=true` | **`kubectl delete/create`** | ⛔ 적용 대상이 ArgoCD 자신 — 이 증분이 피하려는 사고 그 자체 |
+| `Replace=true` | 객체 통째 교체 | ⛔ 문서 명시 *"`ServerSideApply` 보다 **우선**"* ⇒ Secret 보호가 조용히 무력화 |
+| `ServerSideDiff=true` | **비교 방식** | ⛔ 이 앱에는 불필요(PR #7 에서 철회) |
+
+#### 📋 apply 판정 항목 (머지 = 배포)
+
+| # | 보는 것 | 기대 |
+|---|---|---|
+| 1 | `Application/argocd` | **`Synced Healthy`** |
+| 2 | 🔴 **파드 재시작** | **0회** (`startTime` 2026-08-07 유지) |
+| 3 | `Secret/argocd-secret` | data 5키 유지 |
+| 4 | `Job/argocd-redis-secret-init` | 생성 + `Succeeded` (§2.10.1 **위험 2** — 정상) |
+| 5 | field manager | 충돌 2건의 소유자가 `argocd-controller` 로 이동 |
+| 6 | 다른 앱 + root-app | 무영향 |
+| 7 | ⚠️ 반증 조건 | 파드가 하나라도 재시작하면 **예측이 틀린 것이다** — 원인을 규명해 §2.10.8 에 적는다 |
