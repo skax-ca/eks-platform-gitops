@@ -58,8 +58,19 @@ spec:
             #    ec2imds context deadline exceeded 로 CrashLoop 한다(30 §2.2 정정, PoC 실증).
             #    ⛔ hop limit 을 2로 올리는 우회는 기각됐다 — 그 노드의 모든 파드가 노드 IAM role 을
             #       탈취 가능해져 Pod Identity 격리가 클러스터 전체에서 무너진다.
-            - name: vpcId
-              value: '{{metadata.labels.vpcId}}'
+            #       🔑 IMDS 를 못 쓰는 것은 결함이 아니라 **받아들이는 제약**이다.
+            #
+            # ⭐ **vpcId 가 아니라 vpcTags 다**(2026-08-12). chart 3.5.0 이 `--aws-vpc-tags` 를
+            #    지원하고, values 주석이 정확히 우리 경우를 서술한다 —
+            #    "This is alternative to vpcId. Set this when your pods are unable to use the
+            #     metadata service to determine VPC automatically."
+            #    AWS 발급 ID 는 재구축마다 바뀌지만 **Name 태그는 네이밍 규칙(SSOT)이 고정**한다.
+            #    실제로 2026-08-12 재구축 뒤 vpcId 가 파기된 VPC 를 가리키고 있었고, 그 상태에서도
+            #    ArgoCD 는 Synced/Healthy 였다(helm 값이라 실패가 런타임으로 밀린다).
+            #    ⚠️ 태그를 여러 개 주면 **AND 필터**다. 규칙상 Name 하나로 유일성이 성립한다.
+            #    실측: `--set vpcTags.Name=…` → `--aws-vpc-tags=Name=…` 로 렌더된다.
+            - name: vpcTags.Name
+              value: '{{metadata.labels.vpcName}}'
           values: |
             # Pod Identity 바인딩 대상. IRSA 애노테이션은 불필요하다 — association 이 이미 있다.
             serviceAccount:

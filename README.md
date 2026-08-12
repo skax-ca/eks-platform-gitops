@@ -358,13 +358,27 @@ ArgoCD 가 배포하지 않는다. 틀렸다면 신호는 `resource not permitte
 `root-app.yaml` 이 저장소 루트를 훑으므로 **`addons/baseline/` 이 늘어도 그 파일은 바뀌지 않는다.**
 이번에 `exclude` 만 한 줄 늘었다(위 로컬 차트 상자).
 
-**실물 좌표** — 매니페스트에 박힌 환경 고유값의 출처(전부 2026-08-07 실측):
+**실물 좌표** — 매니페스트에 박힌 환경 고유값. ⭐ **2026-08-12 부로 전부 결정적 이름이다.**
 
 | 값 | 출처 |
 |---|---|
-| `eks-ref-dev-an2-main-01` | `aws eks describe-cluster` |
-| `vpc-00e16675363a702a5` | 같은 명령 → `resourcesVpcConfig.vpcId` |
-| `Karpenter-eks-ref-dev-an2-main-01-66112745ef9ad44d7260570055` | `aws iam list-roles` |
+| `eks-ref-dev-an2-main-01` | 네이밍 규칙 `eks-<workload>-<env>-<region>-<purpose>-<serial>` |
+| `vpc-ref-dev-an2-main` | 네이밍 규칙. VPC 의 **`Name` 태그** — ALBC 가 `--aws-vpc-tags` 로 찾는다 |
+| `iamr-ref-dev-an2-karpenter-node` | 네이밍 규칙. `eks-cluster >= v0.5.0` 이 고정한다 |
+
+> ### 🔴 **여기 AWS 발급 ID 를 적지 않는다** (2026-08-12, from-zero 재구축 실증)
+>
+> 전에는 `vpc-00e16675363a702a5` 와 `Karpenter-<cluster>-<무작위>` 가 적혀 있었고,
+> **재구축하자 둘 다 파기된 자원을 가리켰다.** Karpenter 는 `iam:PassRole` 403 으로 멈췄고,
+> ALBC 는 없는 VPC 를 들고 있었다.
+>
+> 🔑 **그 상태에서도 ArgoCD 는 `Synced` 로 보인다.** Git 이 요구한 것을 그대로 적용했으니
+> sync 는 성공이 **맞고**, 실패는 한 계층 아래(IAM · ALBC 런타임)에서 난다.
+> ⛔ *"Synced 면 됐다"* 로 읽으면 원인을 못 찾는다.
+>
+> ⇒ 계층 1(Terraform)이 **이름을 결정적으로** 만들고, 계층 2 는 그 이름을 참조한다.
+> ID 를 적어야 할 것 같으면 **계층 1 의 네이밍이 덜 된 것**이거나 **upstream 이 이미 이름으로
+> 찾는 경로를 제공하는데 우리가 안 쓰고 있는 것**이다(ALBC `--aws-vpc-tags` 가 후자였다).
 
 **아직 검증되지 않은 것** — 2건 중 **1건 해소**(2026-08-07 apply 판정)
 
