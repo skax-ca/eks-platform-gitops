@@ -29,7 +29,7 @@
 #       (실측 2026-08-10). 구버전 제약의 기억이다.
 #
 # 🔴 Terraform 전제(전부 완비 — 실측 2026-08-10):
-#    · 컨트롤러 IAM role · 노드 IAM role · 중단 SQS `Karpenter-eks-ref-dev-an2-main-01`
+#    · 컨트롤러 IAM role · 노드 IAM role · 중단 SQS `Karpenter-eks-demo-dev-an2-main-01`
 #    · Pod Identity association **kube-system/karpenter**
 #      (upstream `modules/karpenter` v21.24.1 의 `namespace` 기본값. **변수로 노출돼 있어 가역적**이다 —
 #       우리 facade 가 안 넘길 뿐이라 "못 바꾼다"가 아니라 "안 바꾼다"다)

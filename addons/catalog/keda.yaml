@@ -13,7 +13,7 @@
 #    ② catalog   : matchLabels {addon-keda: enabled}   → **구독한 클러스터만**
 #
 #    ⇒ 구독은 cluster Secret 에 라벨을 다는 것으로 이뤄진다
-#      (clusters/dev/eks-ref-dev-an2-main-01/cluster-secret.yaml).
+#      (clusters/dev/eks-demo-dev-an2-main-01/cluster-secret.yaml).
 #    🔑 §2.4 의 *"플랫폼이 무엇을·어떤 버전으로 승인하고, 팀은 쓸지를 라벨로 옵트인"* 이
 #       실물에서 뜻하는 바가 이것이다 — **paved road**.
 #
