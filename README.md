@@ -362,9 +362,9 @@ ArgoCD 가 배포하지 않는다. 틀렸다면 신호는 `resource not permitte
 
 | 값 | 출처 |
 |---|---|
-| `eks-ref-dev-an2-main-01` | 네이밍 규칙 `eks-<workload>-<env>-<region>-<purpose>-<serial>` |
-| `vpc-ref-dev-an2-main` | 네이밍 규칙. VPC 의 **`Name` 태그** — ALBC 가 `--aws-vpc-tags` 로 찾는다 |
-| `iamr-ref-dev-an2-karpenter-node` | 네이밍 규칙. `eks-cluster >= v0.5.0` 이 고정한다 |
+| `eks-demo-dev-an2-main-01` | 네이밍 규칙 `eks-<workload>-<env>-<region>-<purpose>-<serial>` |
+| `vpc-demo-dev-an2-main` | 네이밍 규칙. VPC 의 **`Name` 태그** — ALBC 가 `--aws-vpc-tags` 로 찾는다 |
+| `iamr-demo-dev-an2-karpenter-node` | 네이밍 규칙. `eks-cluster >= v0.5.0` 이 고정한다 |
 
 > ### 🔴 **여기 AWS 발급 ID 를 적지 않는다** (2026-08-12, from-zero 재구축 실증)
 >
@@ -555,7 +555,7 @@ whitelist 대상이 아니고, 뒤집으면 **웹훅이 잘못돼도 Application
 > | **② catalog** | **`{addon-keda: enabled}`** | **구독한 클러스터만** |
 >
 > 구독 = cluster Secret 에 라벨을 다는 것이다
-> (`clusters/dev/eks-ref-dev-an2-main-01/cluster-secret.yaml`).
+> (`clusters/dev/eks-demo-dev-an2-main-01/cluster-secret.yaml`).
 > 🔑 `30 §2.4` 의 *"플랫폼이 무엇을·어떤 버전으로 승인하고, 팀은 쓸지를 라벨로 옵트인"*
 > (**paved road**)이 실물에서 뜻하는 바가 이것이다.
 >
