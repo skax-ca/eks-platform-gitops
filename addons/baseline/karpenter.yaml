@@ -1,16 +1,17 @@
 # Karpenter — ①baseline addon (컨트롤러 helm + NodePool/EC2NodeClass)
 #
-# 설계: skax-ca/iac-module-library docs/design/30-gitops-repo.md §2.2 Karpenter 증분 · §2.9
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
 #
-# ⭐ ApplicationSet 이 **2개**인 이유는 CRD 순서다. 파일은 하나로 유지한다(O(1)).
+# ApplicationSet 이 **2개**인 이유는 CRD 순서다. 파일은 하나로 유지한다(O(1)).
 #    ① 컨트롤러 helm  — chart 가 NodePool/NodeClaim/EC2NodeClass CRD 를 동봉한다 (sync-wave 0)
 #    ② CR (NodePool/EC2NodeClass) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
 #
-# 📌 네임스페이스 = **kube-system** — D-ADDON-NS(30 §2.9)의 **예외 2개 중 하나**다.
-#    ⚠️ 이 repo 의 기본 규칙은 "계층 2 addon 은 전용 네임스페이스를 신설한다" 이고,
-#       ALBC·Karpenter 만 예외다. 새 addon 을 이 파일에서 복사할 때 **이 줄을 함께 가져가지 말 것.**
+# 네임스페이스 = **kube-system** — 이 repo의 네임스페이스 규칙(전용 ns 신설)의 **예외 2개 중
+#    하나**다(다른 하나는 ALBC). 이 repo의 기본 규칙은 "계층 2 addon은 전용 네임스페이스를
+#    신설한다"이고, ALBC·Karpenter만 예외다. 새 addon을 이 파일에서 복사할 때 **이 줄을 함께
+#    가져가지 말 것.**
 #
-#    ⭐ **이 예외의 기술적 근거는 Karpenter 가 갖고 있다 — APF(API Priority & Fairness) 다.**
+#    **이 예외의 기술적 근거는 Karpenter 가 갖고 있다 — APF(API Priority & Fairness) 다.**
 #    Karpenter 공식 문서 원문:
 #      "By default, Karpenter is installed into the kube-system namespace, which leverages the
 #       system-leader-election and kube-system-service-accounts FlowSchemas to map calls from the
@@ -25,15 +26,16 @@
 #       AppProject whitelist 에 flowcontrol.apiserver.k8s.io/FlowSchema 도 열어야 한다.
 #
 #    ⛔ **근거로 쓰지 말 것**: "차트 기본이 priorityClassName: system-cluster-critical 이고 그
-#       PriorityClass 는 kube-system 전용이다" 는 **틀렸다** — default ns server-side dry-run 통과
-#       (실측 2026-08-10). 구버전 제약의 기억이다.
+#       PriorityClass 는 kube-system 전용이다" 는 **틀렸다** — default ns 에서도 server-side
+#       dry-run 이 통과한다. 구버전 제약의 기억이다.
 #
-# 🔴 Terraform 전제(전부 완비 — 실측 2026-08-10):
+# 🔴 Terraform 전제(전부 완비):
 #    · 컨트롤러 IAM role · 노드 IAM role · 중단 SQS `Karpenter-eks-demo-dev-an2-main-01`
 #    · Pod Identity association **kube-system/karpenter**
 #      (upstream `modules/karpenter` v21.24.1 의 `namespace` 기본값. **변수로 노출돼 있어 가역적**이다 —
 #       우리 facade 가 안 넘길 뿐이라 "못 바꾼다"가 아니라 "안 바꾼다"다)
-#    · 노드 SG 의 `karpenter.sh/discovery` 태그 (modules/eks-cluster 가 계약으로 부여, 20 §5.2)
+#    · 노드 SG 의 `karpenter.sh/discovery` 태그(modules/eks-cluster의 `node_security_group_tags`가
+#      계약으로 부여)
 ---
 # ────────────────────────────────────────────────────────────────────────────
 # ① 컨트롤러 (OCI helm)
@@ -59,9 +61,9 @@ spec:
     spec:
       project: platform
       source:
-        # ⚠️ OCI registry 다. ALBC 의 HTTP helm repo 와 **다른 호스트**라 egress 를 따로 봐야 했다.
-        #    실측 2026-08-10(canary): revision 1.14.0 해석 + rendered 18, conditions 없음.
-        #    ⭐ Repository Secret 도 enableOCI 설정도 **필요 없었다** — scheme 없는 repoURL 만으로 pull 된다.
+        # ⚠️ OCI registry 다. ALBC 의 HTTP helm repo 와 **다른 호스트**라 egress 를 따로 확인했다
+        #    (canary: revision 1.14.0 해석 + rendered 18, conditions 없음).
+        #    Repository Secret 도 enableOCI 설정도 **필요 없다** — scheme 없는 repoURL 만으로 pull 된다.
         repoURL: public.ecr.aws/karpenter
         chart: karpenter
         # 실측 핀 — ECR Public 태그 전수(2,317개, Link 헤더 페이지네이션) 중 최신.
@@ -73,11 +75,11 @@ spec:
             # 이 값이 없으면 helm template 이 실패한다:
             #   "Chart cannot be installed without a valid settings.clusterName!"
             # ⚠️ 그 실패는 rendered 0 + ComparisonError 로 나타나 **egress 실패와 똑같이 보인다.**
-            #    구분 신호는 revision 해석 여부다(30 §2.9 판독법).
+            #    구분 신호는 revision 해석 여부다 — 해석되면 egress는 정상이고 값 문제다.
             - name: settings.clusterName
               value: '{{name}}'
             # Terraform 서브모듈이 SQS 를 `Karpenter-<cluster>` 로 명명한다 ⇒ 클러스터명에서 **파생**된다.
-            # 라벨을 새로 만들지 않는 이유가 이것이다(30 §2.2 (3)).
+            # 라벨을 새로 만들지 않는 이유가 이것이다.
             - name: settings.interruptionQueue
               value: 'Karpenter-{{name}}'
           values: |
@@ -89,7 +91,7 @@ spec:
             replicas: 2
       destination:
         server: '{{server}}'
-        # D-ADDON-NS 예외 (30 §2.9) — APF FlowSchema. 근거 전문은 위 헤더.
+        # 네임스페이스 예외 — APF FlowSchema. 근거 전문은 위 헤더.
         # ⚠️ 다른 addon 은 전용 ns 를 신설한다(CreateNamespace=true).
         namespace: kube-system
       syncPolicy:
@@ -100,7 +102,7 @@ spec:
           - ServerSideApply=true
 ---
 # ────────────────────────────────────────────────────────────────────────────
-# ② NodePool / EC2NodeClass (계층 2 = 인프라 CR — 30 §0.1 D-CR-OWNERSHIP)
+# ② NodePool / EC2NodeClass — 계층 2(플랫폼 GitOps)가 소유하는 인프라 CR
 # ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -123,7 +125,9 @@ spec:
       source:
         # 이 저장소의 로컬 helm 차트다. ⚠️ ApplicationSet 의 fasttemplate 은 **Application spec** 에만
         #    적용되고 git 경로 안의 파일에는 적용되지 않는다 ⇒ per-cluster 값을 넘기려면 helm 이 필요하다.
-        #    ⛔ 그래서 root-app 의 exclude 에 이 경로가 들어간다(차트를 매니페스트로 오인하면 sync 가 깨진다).
+        #    ⛔ 그래서 이 경로의 파일들은 `+argocd:skip-file-rendering` 마커로 root-app 스캔에서
+        #       빠진다(차트를 매니페스트로 오인하면 sync 가 깨진다) — README의 "root App 스캔에서
+        #       파일을 빼는 방법" 절 참조.
         repoURL: https://github.com/skax-ca/iac-platform-gitops.git
         targetRevision: main
         path: addons/karpenter/nodepool

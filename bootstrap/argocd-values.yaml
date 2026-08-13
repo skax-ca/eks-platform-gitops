@@ -1,9 +1,9 @@
 # ArgoCD helm values — seed 0단계의 입력이자, 이후 자기 관리(self-management)의 SSOT
 #
-# 설계: skax-ca/iac-module-library docs/design/23-argocd-self-managed.md §2.3·§2.4·§2.5
-# chart: argo-cd 10.3.0 (appVersion v3.5.0) — 23 §5 정확 핀
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# chart: argo-cd 10.3.0 (appVersion v3.5.0) — 정확 핀
 #
-# ⭐ 자기소멸(self-superseding) 원칙이 이 파일에도 걸린다(30 §4.1).
+# 자기소멸(self-superseding) 원칙이 이 파일에도 걸린다.
 #    `helm install -f` 에 넘기는 values 는 **이 커밋본 그대로**여야 한다.
 #    ⛔ `--set` 을 쓰지 않는다 — 그 차이가 영구 드리프트로 남는다.
 #
@@ -16,20 +16,19 @@
 #    아래 "기본값을 유지하는 것" 주석이 그 판단의 기록이다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# D-ARGOCD-SM-AUTH (23 §2.3) — dex 를 끈다.
+# dex 를 끈다.
 #   seed 는 local admin 으로 시작하고, 이후 인증은 configs.cm.oidc.config 를 소비자가 채운다.
 #   OIDC 직결이면 dex 는 불필요하고, 켜 두면 쓰지 않는 파드가 하나 도는 **죽은 경로**가 된다.
 #   ⚠️ dex 를 경유해야 하는 IdP(예: SAML-only)를 쓰게 되면 그때 다시 켠다.
 dex:
   enabled: false
 
-# 23 §2.5 — notifications controller 를 끈다.
-#   ⚠️ 이것이 모순처럼 보일 수 있다: 21 §1.1 의 **탈출 조건 ②**가 "Notifications 가 필요하면
-#      self-managed" 라고 적었기 때문이다. 모순이 아니다 —
-#      탈출 조건은 *"그 기능이 필요한 고객사"* 를 가리키고, **그 고객사는 이 값을 true 로 켠다.**
-#      baseline 이 켜 두는 것과는 다른 질문이다.
-#   📌 즉 이 줄은 "기능을 막는 것"이 아니라 **"기본값을 안 켜는 것"** 이고,
-#      탈출 조건이 실제로 발동한 고객사의 유일한 진입점이다.
+# notifications controller 를 끈다.
+#   ⚠️ 관리형 Capability 로 전환하는 조건 중 하나가 "Notifications 가 필요한 고객사"라는 것과
+#      모순처럼 보일 수 있다. 모순이 아니다 — **그 기능이 필요한 고객사가 이 값을 true 로 켠다.**
+#      baseline 이 기본으로 켜 두는 것과는 다른 질문이다.
+#   즉 이 줄은 "기능을 막는 것"이 아니라 **"기본값을 안 켜는 것"**이고, 그 기능이 실제로 필요한
+#   고객사의 유일한 진입점이다.
 notifications:
   enabled: false
 
@@ -37,17 +36,17 @@ notifications:
 # 기본값을 유지하는 것 — 판단의 기록 (여기에 값을 적지 않는다)
 # ─────────────────────────────────────────────────────────────────────────────
 # server.service.type: ClusterIP
-#   D-ARGOCD-SM-REACH (23 §2.2) — 노출을 만들지 않는다. 사람은 workbench 경유 port-forward 로 닿는다.
+#   노출을 만들지 않는다. 사람은 workbench 경유 port-forward 로 닿는다.
 #   ⛔ internal ALB + Ingress 는 ACM·Route53·global.domain·SG 가 새로 필요하고 고객사마다 다르다.
 #
 # redis-ha.enabled: false · 각 컴포넌트 replicas: 1
-#   D-ARGOCD-SM-HA (23 §2.4) — 현재 유일한 실증 환경이 dev 단일 클러스터다.
+#   현재 유일한 실증 환경이 dev 단일 클러스터다.
 #   HA 가 필요해지면 redis-ha.enabled 와 replicas 를 소비자 값으로 켠다.
 #   ⚠️ hub SPOF 의 비용은 "복구까지 pull 이 멈춘다"이고, desired state 는 Git 에 그대로 있다.
 #
 # crds.install: true · crds.keep: true
-#   ⚠️ uninstall 해도 CRD 가 남는다. 관리형의 delete_propagation_policy=RETAIN 과 같은 성격이며,
-#      "관리형만 지저분하게 남는다"는 잘못된 대비다(30 §1.1 정정).
+#   ⚠️ uninstall 해도 CRD 가 남는다. 관리형 addon 의 delete_propagation_policy=RETAIN 과 같은
+#      성격이라, "관리형만 지저분하게 남는다"는 대비는 성립하지 않는다.
 #
 # configs.params."server.insecure": (미설정 → TLS 유지)
 #   argocd-server 는 자체 서명 인증서로 HTTPS 를 서빙한다. port-forward 로 접속하면

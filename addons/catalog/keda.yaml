@@ -1,10 +1,9 @@
 # KEDA — ②opt-in 카탈로그 addon (이벤트 기반 오토스케일링)
 #
-# 설계: skax-ca/iac-module-library docs/design/30-gitops-repo.md §2.10.3 (D-KEDA-CATALOG) · §2.4
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
 #
-# ⭐ **`addons/catalog/` 의 첫 파일이다.** §2.4 가 이 경로를 2026-07-20 에 명문화하면서
-#    *"경로만 명문화, 구현은 미룸"* 이라고 적었고 — 이 증분이 그것을 처음 실물로 만든다.
-#    §2.4 표의 ② 예시가 *"Kafka/Redis operator·**KEDA**·service mesh"* 였다.
+# **`addons/catalog/` 의 첫 파일이다.** ①baseline(전 클러스터 자동)과 달리, 팀이 라벨로
+#    옵트인해야 배포되는 카탈로그 addon 의 실물 예시다.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # 🔀 **①baseline 과 갈리는 지점은 generator 의 matchLabels 하나뿐이다**
@@ -14,29 +13,29 @@
 #
 #    ⇒ 구독은 cluster Secret 에 라벨을 다는 것으로 이뤄진다
 #      (clusters/dev/eks-demo-dev-an2-main-01/cluster-secret.yaml).
-#    🔑 §2.4 의 *"플랫폼이 무엇을·어떤 버전으로 승인하고, 팀은 쓸지를 라벨로 옵트인"* 이
+#    🔑 **플랫폼이 무엇을·어떤 버전으로 승인하고, 팀은 쓸지를 라벨로 옵트인**하는 것이
 #       실물에서 뜻하는 바가 이것이다 — **paved road**.
 #
-#    🔴 30 §2.9 의 *"cluster Secret 은 손대지 않는다"* 는 **baseline 전제**였다(§2.10.3 정정).
-#       O(1) 은 유지된다 — 새 클러스터도 Secret 1개이고 라벨이 하나 늘 뿐이다.
+#    cluster Secret 에 라벨을 추가하는 것은 O(1) 확장을 해치지 않는다 — 새 클러스터도
+#    Secret 1개이고 라벨이 하나 늘 뿐이다.
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# 📌 네임스페이스 = **keda (전용 ns 신설)** — D-ADDON-NS 기본 규칙.
+# 네임스페이스 = **keda (전용 ns 신설)** — 이 repo의 네임스페이스 기본 규칙.
 #    ⛔ addons/baseline/{aws-load-balancer-controller,karpenter}.yaml 의 `kube-system` 을
 #       복사해 오지 말 것. 그 둘은 근거를 댄 예외다.
-#    ⛔ `managedNamespaceMetadata` 를 쓰지 않는다(30 §2.10.0 판정 ②) — 쓰면 ArgoCD 가 ns 를
-#       소유하게 되고 아래 prune:true 와 겹쳐 **addon 제거가 네임스페이스째 지운다**.
+#    ⛔ `managedNamespaceMetadata` 를 쓰지 않는다 — 쓰면 ArgoCD 가 ns 를 소유하게 되고
+#       아래 prune:true 와 겹쳐 **addon 제거가 네임스페이스째 지운다**.
 #
 # 🔴 Terraform 전제: **없다.**
-#    AWS 스케일러(SQS·CloudWatch)를 이번 증분에 넣지 않기로 했다(사용자 결정 2026-08-11)
-#    ⇒ Pod Identity·IAM 0건 ⇒ **이 증분이 계층 2 안에서 닫힌다**(모듈 repo .tf 도, 소비 repo apply 도 없다).
+#    AWS 스케일러(SQS·CloudWatch)는 이 addon 에 넣지 않았다
+#    ⇒ Pod Identity·IAM 0건 ⇒ **이 addon 이 계층 2 안에서 닫힌다**(모듈 repo .tf 도, 소비 repo apply 도 없다).
 #    ⚠️ AWS 스케일러 요구가 생기면 modules/eks-cluster/iam.tf 에 keda/keda-operator association 을
 #       연다. **가역적이다** — ALBC·external-dns 와 같은 패턴이라 새로 발명할 것이 없다.
 #
 # 🖼️ 이미지: ghcr.io/kedacore/{keda,keda-metrics-apiserver,keda-admission-webhooks}
 #    ✅ arm64 확인 완료 — 3개 전부 manifest index 에 linux/arm64(이 클러스터는 Graviton).
 #    ⚠️ **egress canary 는 이미지 pull 을 판정할 수 없다** — canary 는 repo-server 의 차트 fetch 만
-#       본다. 이미지 pull 은 kubelet→NAT 로 경로가 다르고, ghcr.io 는 증분 ③④가 첫 사용이다.
+#       본다. 이미지 pull 은 kubelet→NAT 로 경로가 다르다 — kyverno 와 함께 ghcr.io 첫 사용이다.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -46,7 +45,7 @@ spec:
   generators:
     - clusters:
         selector:
-          # ⭐ 여기가 baseline 과 갈리는 유일한 지점이다(위 헤더).
+          # 여기가 baseline 과 갈리는 유일한 지점이다(위 헤더).
           #    라벨이 없는 클러스터는 이 팬아웃에 걸리지 않는다 = 구독하지 않은 것이다.
           matchLabels:
             addon-keda: enabled
@@ -58,7 +57,7 @@ spec:
       source:
         repoURL: https://kedacore.github.io/charts
         chart: keda
-        # 실측 핀(2026-08-11) — index.yaml 전수 78개 중 stable 72개를 semver 정렬한 최신.
+        # 실측 핀 — index.yaml 전수 78개 중 stable 72개를 semver 정렬한 최신.
         # chart kubeVersion `>=v1.23.0-0` · 클러스터 1.35.6 ⇒ 충족.
         targetRevision: 2.20.2
         # ⛔ helm values 를 넘기지 않는다 — 차트 기본값 그대로가 이 증분의 결정이다.
@@ -77,7 +76,7 @@ spec:
           selfHeal: true
         syncOptions:
           # 전용 ns 신설 — 자동 생성되는 Namespace 가 AppProject clusterResourceWhitelist 검사를
-          # 받는다(30 §2.10.0 판정 ①). {group:"", kind:Namespace} 는 증분 ③이 이미 열었다.
+          # 받는다. {group:"", kind:Namespace} 는 kyverno addon 이 이미 열어 뒀다.
           - CreateNamespace=true
           # CRD 6개 + APIService. ALBC 와 같은 이유로 SSA.
           - ServerSideApply=true

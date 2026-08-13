@@ -1,17 +1,17 @@
 # +argocd:skip-file-rendering
 #   ⚠️ 이 마커는 root-app(directory 소스)이 이 파일을 매니페스트로 읽지 않게 한다.
-#      root-app 의 exclude 로 하지 않는 이유는 README 의 D-ROOTAPP-SKIP 상자 참조.
+#      root-app 의 exclude 로 하지 않는 이유는 README의 "root App 스캔에서 파일을 빼는 방법" 절 참조.
 apiVersion: v2
 name: karpenter-nodepool
 description: |
-  Karpenter NodePool / EC2NodeClass — 계층 2 인프라 CR (30 §0.1 D-CR-OWNERSHIP).
+  Karpenter NodePool / EC2NodeClass — 계층 2(플랫폼 GitOps)가 소유하는 인프라 CR.
 
   ⚠️ 이것이 helm 차트인 이유는 값을 추상화하고 싶어서가 아니다. ApplicationSet 의 fasttemplate 이
      **Application spec 에만** 적용되고 git 경로 안의 파일에는 적용되지 않기 때문이다 —
      per-cluster 값(clusterName·nodeRole)을 CR 에 주입할 다른 수단이 없다.
      ⇒ 차트 하나에 템플릿 두 개. 그 이상은 만들지 않는다.
 
-  📌 30 §2.5 (B) 가 예고한 `range .Values.nodePools` 리스트화(gpu·arm 풀 다양화)는
-     **아직 하지 않았다.** 지금 요구가 NodePool 1종이고, 리스트는 2종째가 실제로 필요할 때 연다.
+  NodePool 종류를 `range .Values.nodePools`로 리스트화(gpu·arm 풀 다양화)하는 확장은
+  아직 하지 않았다 — 지금 요구가 NodePool 1종이고, 2종째가 실제로 필요할 때 연다.
 type: application
 version: 0.1.0

@@ -1,40 +1,40 @@
 # Kyverno — ①baseline addon (정책 엔진 + PSS 정책)
 #
-# 설계: skax-ca/iac-module-library docs/design/30-gitops-repo.md §2.10.2 (D-KYVERNO) · §2.4
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
 #
-# ⭐ **①baseline 인 이유**(사용자 결정 2026-08-11): 정책 엔진은 **가드레일**이고,
-#    **옵트인 가드레일은 가드레일이 아니다.** ALBC·Karpenter 와 같은 층에 둔다.
+# **①baseline 인 이유**: 정책 엔진은 **가드레일**이고, **옵트인 가드레일은 가드레일이
+#    아니다.** ALBC·Karpenter 와 같은 층에 둔다.
 #
-# ⭐ ApplicationSet 이 **2개**인 이유는 CRD 순서다 — Karpenter 와 **같은 형태**이고
-#    파일은 하나로 유지한다(30 §1 O(1)).
+# ApplicationSet 이 **2개**인 이유는 CRD 순서다 — Karpenter 와 **같은 형태**이고
+#    파일은 하나로 유지한다(O(1)).
 #    ① 컨트롤러 helm — 차트가 ClusterPolicy 등 CRD 22개를 동봉한다        (sync-wave 0)
 #    ② PSS 정책(ClusterPolicy 11개) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# 📌 네임스페이스 = **kyverno (전용 ns 신설)** — D-ADDON-NS 의 **기본 규칙**이다.
+# 네임스페이스 = **kyverno (전용 ns 신설)** — 이 repo의 네임스페이스 기본 규칙이다.
 #    ⛔ ALBC·karpenter.yaml 의 `namespace: kube-system` 을 **복사해 오지 말 것.**
 #       그 둘은 근거를 댄 예외이고(APF FlowSchema · Pod Identity association),
 #       Kyverno 에는 그런 근거가 없다. *"차트 기본값이 그래서"* 는 근거가 아니다.
 #
 # 🔴 그래서 `CreateNamespace=true` 가 필요하고, 그것이 AppProject 를 하나 더 열게 만든다 —
-#    자동 생성되는 Namespace 는 **`clusterResourceWhitelist` 검사를 받는다**(30 §2.10.0 판정 ①,
-#    argo-cd v3.5.0 소스로 판정). ⇒ projects/platform.yaml 에 {group:"", kind:Namespace} 를 열었다.
+#    자동 생성되는 Namespace 는 **`clusterResourceWhitelist` 검사를 받는다**(argo-cd v3.5.0
+#    소스로 확인). ⇒ projects/platform.yaml 에 {group:"", kind:Namespace} 를 열었다.
 #    ⚠️ **ns 가 이미 있으면 검사 자체가 없다** — 손으로 먼저 만들어 두면 whitelist 없이도 통과하고,
 #       **두 번째 클러스터에서만** 깨진다. 그래서 미루지 않고 지금 연다.
 #
 # ⛔ `managedNamespaceMetadata` 를 쓰지 않는다 — 그것을 쓰면 ArgoCD 가 ns 를 **소유**하게 되고
 #    공식 문서가 "including the possibility to delete it" 이라고 못박는다. 아래 prune:true 와
-#    겹치면 **addon 제거가 네임스페이스째 지운다**(30 §2.10.0 판정 ②).
+#    겹치면 **addon 제거가 네임스페이스째 지운다.**
 #    ✅ 쓰지 않으므로 ns 는 추적 대상이 아니고, prune 대상도 아니다.
 #
 # 🔴 Terraform 전제: **없다.** IAM·SQS 를 요구하지 않는다 ⇒ 이 증분은 계층 2 안에서 닫힌다.
 #
 # 🖼️ 이미지: reg.kyverno.io — **GHCR 앞의 vanity 도메인**이다(401 응답의
-#    www-authenticate realm 이 https://ghcr.io/token, x-github-request-id 헤더. 실측 2026-08-11).
+#    www-authenticate realm 이 https://ghcr.io/token, x-github-request-id 헤더로 확인).
 #    ⇒ 노드가 **reg.kyverno.io 와 ghcr.io 둘 다** 나가야 한다.
 #    ⚠️ **egress canary 는 이것을 판정할 수 없다** — canary 는 repo-server 의 차트 fetch 만 본다.
-#       이미지 pull 은 kubelet→NAT 로 경로가 다르고, 지금까지 addon 이미지는 전부 public.ecr.aws
-#       였다. **이번이 ghcr.io 첫 사용**이다 ⇒ apply 판정 항목.
+#       이미지 pull 은 kubelet→NAT 로 경로가 다르고, 다른 baseline addon 이미지는 전부
+#       public.ecr.aws 인 데 비해 **이것이 ghcr.io 첫 사용**이다 ⇒ apply 판정 항목.
 #    ✅ arm64 확인 완료(manifest index 에 linux/arm64) — 이 클러스터는 Graviton 이다.
 ---
 # ────────────────────────────────────────────────────────────────────────────
@@ -56,23 +56,22 @@ spec:
       name: '{{name}}-kyverno'
       annotations:
         # 정책(②)보다 먼저. ⚠️ wave 는 생성 순서만 정하고 sync 완료를 기다리지 않는다 —
-        #    실제 안전장치는 ②의 SkipDryRunOnMissingResource 다(증분 ①에서 작동 실증).
+        #    실제 안전장치는 ②의 SkipDryRunOnMissingResource 다.
         argocd.argoproj.io/sync-wave: "0"
-        # 🔴 **D-SSDIFF** (30 §2.10.6) — CRD 11개(`policies.kyverno.io`)가 영구 `OutOfSync` 였다.
-        #    ⚠️ 원인은 §2.10.5 가 적은 *"kube-apiserver 가 채운다"* 가 **아니다** — 그 매니저는
-        #       `status` 서브리소스만 소유한다. 진짜 차이는 **`spec.conversion`** 이고,
-        #       managedFields 어디에도 없는 **무소유 필드**(apiserver 기본값)다.
-        #    ⇒ 그래서 `managedFieldsManagers` 로는 잡히지 않는다. 소유자가 없으니까.
-        #    ✅ 실측: `spec.conversion` 을 뺀 desired 로 SSA dry-run → predicted == live **IDENTICAL**.
+        # 🔴 CRD 11개(`policies.kyverno.io`)가 `ServerSideDiff` 없이는 영구 `OutOfSync` 다.
+        #    진짜 차이는 **`spec.conversion`** 이고, managedFields 어디에도 없는 **무소유
+        #    필드**(apiserver 가 기본값으로 채운 것)다 — 어느 매니저도 소유하지 않으므로
+        #    `ignoreDifferences`(managedFieldsManagers 기반)로는 잡히지 않는다.
+        #    ✅ 확인: `spec.conversion` 을 뺀 desired 로 SSA dry-run → predicted == live **IDENTICAL**.
         argocd.argoproj.io/compare-options: ServerSideDiff=true
     spec:
       project: platform
       source:
         repoURL: https://kyverno.github.io/kyverno/
         chart: kyverno
-        # 실측 핀(2026-08-11) — index.yaml 전수 263개 중 stable 79개를 semver 정렬한 최신.
+        # 실측 핀 — index.yaml 전수 263개 중 stable 79개를 semver 정렬한 최신.
         # chart kubeVersion `>=1.25.0-0` · 클러스터 1.35.6 ⇒ 충족.
-        # ⭐ kyverno-policies 와 **같은 번호로 함께 릴리스된다** ⇒ 스큐 판단이 필요 없다. 올릴 땐 둘 다.
+        # kyverno-policies 와 **같은 번호로 함께 릴리스된다** ⇒ 스큐 판단이 필요 없다. 올릴 땐 둘 다.
         targetRevision: 3.8.2
         # ⛔ helm values 를 넘기지 않는다 — 차트 기본값을 그대로 받는 것이 이 증분의 결정이다.
         #    (기본값과 다른 것만 적는다. 아래 "기본값을 유지하는 것" 참조)
@@ -80,9 +79,9 @@ spec:
         # 기본값을 유지하는 것 — 판단의 기록:
         #  · 컨트롤러 4종(admission·background·cleanup·reports) replicas 미지정 = 1.
         #    dev 2노드에 충분하다. ⚠️ podAntiAffinity 가 걸려 있으므로 **HA 로 올릴 때 노드 수를 함께 본다.**
-        #  · config.webhooks.namespaceSelector 가 kube-system·kyverno 를 **이미 제외**한다(실측 ConfigMap)
-        #    ⇒ ⭐ ALBC·Karpenter 는 Kyverno 웹훅 경로에 **아예 들어가지 않는다.**
-        #       D-ADDON-NS 의 예외 2개가 무관한 방향에서 값을 돌려줬다.
+        #  · config.webhooks.namespaceSelector 가 kube-system·kyverno 를 **이미 제외**한다(ConfigMap 확인)
+        #    ⇒ ALBC·Karpenter 는 Kyverno 웹훅 경로에 **아예 들어가지 않는다.**
+        #       네임스페이스 예외 2개(kube-system)가 무관한 방향에서 값을 돌려줬다.
         #    🔴 그러나 **argocd 는 제외 대상이 아니다.** 지금(Audit + failurePolicy Ignore)은 무해하지만
         #       Enforce 로 전환하면 **순환 의존**이 된다 — Kyverno 장애 → ArgoCD 막힘 → Kyverno 를
         #       고칠 수단 상실. ⇒ Enforce 전환은 그 질문을 **먼저** 답한다.
@@ -96,13 +95,13 @@ spec:
           prune: true
           selfHeal: true
         syncOptions:
-          # 전용 ns 신설 — D-ADDON-NS 기본 규칙. 위 헤더의 whitelist 주의사항을 함께 읽을 것.
+          # 전용 ns 신설 — 이 repo의 네임스페이스 기본 규칙. 위 헤더의 whitelist 주의사항을 함께 읽을 것.
           - CreateNamespace=true
           # CRD 22개가 커서 client-side apply 의 애노테이션 크기 한도에 걸린다(ALBC 와 같은 이유).
           - ServerSideApply=true
 ---
 # ────────────────────────────────────────────────────────────────────────────
-# ② PSS 정책 (ClusterPolicy 11개) — 계층 2 = 플랫폼 소유 정책 (30 §0.1 D-CR-OWNERSHIP)
+# ② PSS 정책(ClusterPolicy 11개) — 계층 2(플랫폼 GitOps)가 소유하는 정책
 # ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -120,12 +119,11 @@ spec:
       name: '{{name}}-kyverno-policies'
       annotations:
         argocd.argoproj.io/sync-wave: "5"
-        # 🔴 **D-SSDIFF** (30 §2.10.6) — ClusterPolicy 11개가 영구 `OutOfSync` 였다.
-        #    ⚠️ 원인은 §2.10.5 가 적은 *"kyverno 자기 mutating webhook 이 주입"* 이 **아니다** —
-        #       `kyverno` 매니저도 `status` 서브리소스만 소유한다. 진짜 차이는
-        #       **`spec.admission`·`spec.emitWarning`** 이고, **Kyverno CRD openAPI 스키마의
-        #       `default:`** 를 apiserver 가 채운 것이다. ⇒ ①의 CRD 와 **같은 원인**이다.
-        #    ✅ 실측: 그 둘을 뺀 desired 로 SSA dry-run → predicted == live **IDENTICAL**.
+        # 🔴 ClusterPolicy 11개도 `ServerSideDiff` 없이는 영구 `OutOfSync` 다 — ①의 CRD 와
+        #    **같은 원인**이다. 진짜 차이는 **`spec.admission`·`spec.emitWarning`** 이고,
+        #    Kyverno CRD openAPI 스키마의 `default:`를 apiserver 가 채운 것이다(`kyverno` 매니저는
+        #    `status` 서브리소스만 소유하므로 이 필드들의 소유자가 아니다).
+        #    ✅ 확인: 그 둘을 뺀 desired 로 SSA dry-run → predicted == live **IDENTICAL**.
         #    ⚠️ 차트가 기본값을 늘리면 `ignoreDifferences` 였다면 그때마다 다시 열거해야 했다 —
         #       ServerSideDiff 는 원인 자체를 다루므로 목록을 늘릴 일이 없다.
         argocd.argoproj.io/compare-options: ServerSideDiff=true
@@ -141,14 +139,14 @@ spec:
             # ─────────────────────────────────────────────────────────────
             # 🔴 **failurePolicy 는 chart 기본 Fail 에서 Ignore 로 바꾼 유일한 값이다.**
             #
-            #    ⭐ validationFailureAction 과 **이름이 비슷하지만 완전히 다른 축**이다:
+            #    validationFailureAction 과 **이름이 비슷하지만 완전히 다른 축**이다:
             #       · validationFailureAction = **정책을 위반했을 때** 무엇을 하는가 → Audit(차트 기본, 유지)
             #       · failurePolicy           = **웹훅에 닿지 못할 때** 무엇을 하는가 → Fail(차트 기본)
             #
             #    **Audit + Fail 은 비정합이다.** 아무것도 막지 않기로 결정해 놓고,
             #    Kyverno 가 죽으면 **전부 막는다** — 얻는 것 없이 가용성만 깎는다.
             #
-            #    ⭐ background:true(차트 기본)라 잃는 것이 거의 없다 — 웹훅을 놓쳐도
+            #    background:true(차트 기본)라 잃는 것이 거의 없다 — 웹훅을 놓쳐도
             #       **백그라운드 스캔이 PolicyReport 를 만든다.** 잃는 것은 *실시간성* 뿐이다.
             #
             #    ⚠️ **Enforce 로 전환할 때 Fail 로 함께 올린다.** 두 값은 **짝으로 움직인다** —
@@ -156,7 +154,7 @@ spec:
             # ─────────────────────────────────────────────────────────────
             - name: failurePolicy
               value: Ignore
-        # ⛔ validationFailureAction 을 적지 않는다 — **Audit 이 차트 기본값이다**(values.yaml :49 실측).
+        # ⛔ validationFailureAction 을 적지 않는다 — **Audit 이 차트 기본값이다**(차트 values.yaml 확인).
         #    기본값을 옮겨 적으면 차트를 올릴 때 그 줄이 조용히 낡는다(argocd-values.yaml 과 같은 규율).
         # ⛔ podSecurityStandard 도 적지 않는다 — 기본이 `baseline` 이고 그것이 우리가 원하는 값이다.
       destination:

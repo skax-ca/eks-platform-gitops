@@ -1,26 +1,27 @@
 # AWS Load Balancer Controller — ①baseline addon (전 클러스터)
 #
-# 설계: skax-ca/iac-module-library docs/design/30-gitops-repo.md §2.2 · §2.4-① · §2.9
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
 #
-# ⭐ 이 파일은 **클러스터 수와 무관하게 불변**이다. 새 클러스터 = cluster Secret 1개 추가로 끝난다
-#    (30 §1 O(1) 확장 규칙). per-cluster 값은 전부 cluster Secret 의 **라벨**에서 끌어온다.
+# 이 파일은 **클러스터 수와 무관하게 불변**이다. 새 클러스터 = cluster Secret 1개 추가로 끝난다.
+#    per-cluster 값은 전부 cluster Secret 의 **라벨**에서 끌어온다.
 #
-# ⚠️ 왜 helm 인가 — EKS community addon 에 ALBC 가 **없다**(D-ADDON-BOUNDARY 판정, 20 §1.1).
-#    "GitOps 가 좋아서"가 아니라 **다른 경로가 없어서**다.
+# ⚠️ 왜 helm 인가 — **EKS community addon에 ALBC가 없다.** "GitOps가 좋아서"가 아니라
+#    **다른 경로가 없어서**다.
 #
-# 📌 네임스페이스 = **kube-system** — D-ADDON-NS(30 §2.9)의 **예외 2개 중 하나**다.
-#    ⚠️ 이 repo 의 기본 규칙은 "계층 2 addon 은 전용 네임스페이스를 신설한다" 이고,
-#       ALBC·Karpenter 만 예외다. 새 addon 을 이 파일을 참고해 만들 때 **이 줄을 복사하지 말 것.**
+# 네임스페이스 = **kube-system** — 이 repo의 네임스페이스 규칙(전용 ns 신설)의 **예외 2개 중
+#    하나**다(다른 하나는 Karpenter). 이 repo의 기본 규칙은 "계층 2 addon은 전용 네임스페이스를
+#    신설한다"이고, ALBC·Karpenter만 예외다. 새 addon을 이 파일을 참고해 만들 때 **이 줄을
+#    복사하지 말 것.**
 #    근거 3겹(순서가 중요하다 — 3만 적으면 논리가 뒤집힌다):
 #      1. AWS EKS User Guide 가 `eksctl create iamserviceaccount --namespace=kube-system` +
 #         `helm ... -n kube-system` 을 쓴다. upstream kubernetes-sigs 설치 가이드도 동일하다.
 #      2. (Karpenter 쪽 근거) APF FlowSchema — addons/baseline/karpenter.yaml 헤더 참조.
 #         두 컨트롤러를 같은 ns 에 두는 편이 예외를 하나로 유지한다.
 #      3. **집행 장치** — Pod Identity association 이 kube-system/aws-load-balancer-controller 다
-#         (modules/eks-cluster/iam.tf 가 명시. 실측 2026-08-10).
+#         (modules/eks-cluster/iam.tf 가 명시).
 #         ⇒ ns 를 바꾸면 컨트롤러가 AWS 자격증명을 **못 받는다.**
 #
-# 🔴 IAM 자체는 Terraform 전제다. 이 매니페스트는 **SA 이름만** 맞춘다(20 §2.6a).
+# 🔴 IAM 자체는 Terraform 전제다. 이 매니페스트는 **SA 이름만** 맞춘다.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -30,7 +31,7 @@ spec:
   generators:
     # cluster generator — 라벨이 맞는 cluster Secret 마다 Application 을 1개씩 만든다.
     # ⚠️ ArgoCD 내장 in-cluster 에는 Secret 도 라벨도 없어 여기 걸리지 않는다.
-    #    우리가 cluster Secret 을 명시적으로 만든 이유가 이것이다(30 §4.1 정정).
+    #    우리가 cluster Secret 을 명시적으로 만든 이유가 이것이다.
     - clusters:
         selector:
           matchLabels:
@@ -41,34 +42,34 @@ spec:
     spec:
       project: platform
       source:
-        # 실측 2026-08-10(egress canary): repo-server 가 이 호스트에 닿는다 —
+        # egress 확인 완료(canary): repo-server 가 이 호스트에 닿는다 —
         # revision 3.5.0 해석 + rendered 17, conditions 없음. ⇒ ECR 미러링 불필요.
         repoURL: https://aws.github.io/eks-charts
         chart: aws-load-balancer-controller
         # 실측 핀 — index.yaml 전수(80개) semver 정렬의 최신. chart 에 kubeVersion 제약 없음.
-        # ⚠️ 30 §2.2 에 적힌 3.4.2 는 PoC 시점 값이다. 올릴 때는 canary 로 다시 실측한다.
+        # ⚠️ 올릴 때는 canary 로 다시 확인한다 — 기존 핀 값을 여기 남기지 않는다(git이 이력을 갖는다).
         targetRevision: 3.5.0
         helm:
           parameters:
             # ALBC 필수 — 실제 EKS 클러스터명이어야 한다.
-            # 🔑 cluster Secret 의 이름이 곧 {{name}} 이다. 별칭을 쓰면 **조용히 틀린다**(30 §2.1).
+            # 🔑 cluster Secret 의 이름이 곧 {{name}} 이다. 별칭을 쓰면 **조용히 틀린다**.
             - name: clusterName
               value: '{{name}}'
             # ⚠️ 파드에서 IMDS 로 자동 탐지되지 않는다 — 노드 IMDSv2 hop limit=1 이라
-            #    ec2imds context deadline exceeded 로 CrashLoop 한다(30 §2.2 정정, PoC 실증).
+            #    ec2imds context deadline exceeded 로 CrashLoop 한다.
             #    ⛔ hop limit 을 2로 올리는 우회는 기각됐다 — 그 노드의 모든 파드가 노드 IAM role 을
             #       탈취 가능해져 Pod Identity 격리가 클러스터 전체에서 무너진다.
             #       🔑 IMDS 를 못 쓰는 것은 결함이 아니라 **받아들이는 제약**이다.
             #
-            # ⭐ **vpcId 가 아니라 vpcTags 다**(2026-08-12). chart 3.5.0 이 `--aws-vpc-tags` 를
+            # **vpcId 가 아니라 vpcTags 다.** chart 3.5.0 이 `--aws-vpc-tags` 를
             #    지원하고, values 주석이 정확히 우리 경우를 서술한다 —
             #    "This is alternative to vpcId. Set this when your pods are unable to use the
             #     metadata service to determine VPC automatically."
             #    AWS 발급 ID 는 재구축마다 바뀌지만 **Name 태그는 네이밍 규칙(SSOT)이 고정**한다.
-            #    실제로 2026-08-12 재구축 뒤 vpcId 가 파기된 VPC 를 가리키고 있었고, 그 상태에서도
+            #    실제로 재구축 뒤 vpcId 가 파기된 VPC 를 가리키고 있었던 적이 있고, 그 상태에서도
             #    ArgoCD 는 Synced/Healthy 였다(helm 값이라 실패가 런타임으로 밀린다).
             #    ⚠️ 태그를 여러 개 주면 **AND 필터**다. 규칙상 Name 하나로 유일성이 성립한다.
-            #    실측: `--set vpcTags.Name=…` → `--aws-vpc-tags=Name=…` 로 렌더된다.
+            #    `--set vpcTags.Name=…` 는 `--aws-vpc-tags=Name=…` 로 렌더된다.
             - name: vpcTags.Name
               value: '{{metadata.labels.vpcName}}'
           values: |
@@ -80,13 +81,13 @@ spec:
             # 필요해지면 그때 whitelist 에 networking.k8s.io/IngressClass 를 추가하고 켠다.
             createIngressClassResource: false
             # 동일 리전 공유값이라 inline 이다. cross-region 스포크를 도입하면
-            # cluster Secret 의 region 라벨로 승격한다(30 §2.5 (C)).
+            # cluster Secret 의 region 라벨로 승격한다.
             region: ap-northeast-2
       destination:
-        # self-managed ArgoCD 는 자신이 도는 클러스터를 이 URL 로 가리킨다(30 §4.1).
-        # ⚠️ 관리형 Capability 로 전환하면 EKS 클러스터 ARN 이다 — 21 §1.7 갈림점 3.
+        # self-managed ArgoCD 는 자신이 도는 클러스터를 이 URL 로 가리킨다.
+        # ⚠️ 관리형 Capability 로 전환하면 EKS 클러스터 ARN 이다.
         server: '{{server}}'
-        # D-ADDON-NS 예외 (30 §2.9) — 근거는 위 헤더. ⚠️ 다른 addon 은 전용 ns 를 신설한다.
+        # 네임스페이스 예외 — 근거는 위 헤더. ⚠️ 다른 addon 은 전용 ns 를 신설한다.
         namespace: kube-system
       syncPolicy:
         automated:
