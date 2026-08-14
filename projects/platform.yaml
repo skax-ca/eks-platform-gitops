@@ -45,6 +45,10 @@ spec:
     # ②opt-in 카탈로그의 첫 항목이다. **가드레일은 분류와 무관하다** — baseline 이든 catalog 든
     #    sourceRepos 에 등재되지 않으면 InvalidSpecError 다.
     - https://kedacore.github.io/charts
+    # ── Cluster Autoscaler ──
+    # ②opt-in 카탈로그. 로컬 HTTP 200 확인(egress canary 는 옵트인 전 별도 실행 필요 —
+    #    addons/catalog/cluster-autoscaler.yaml 헤더 참조).
+    - https://kubernetes.github.io/autoscaler
 
   # 등록된 클러스터만 허용. 새 클러스터 등록 시 여기에도 추가한다.
   # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
@@ -82,6 +86,9 @@ spec:
     #    만드는 중간 리소스이고 **ArgoCD 가 배포하지 않는다.** 최소권한이 원칙이므로 뺀다.
     #    ⚠️ 만약 틀렸다면 신호는 명확하다 — sync 시 "resource not permitted in project".
     #    그때 이 줄을 근거와 함께 추가한다.
+    # ── Cluster Autoscaler ──
+    # cluster-scoped 는 ClusterRole·ClusterRoleBinding 뿐이고(`helm template` 로컬 렌더 실측,
+    #    CRD·APIService 없음) 둘 다 위 ALBC 항목과 겹친다 ⇒ 추가할 것이 없다(Karpenter와 같은 결론).
     # ── Kyverno ──
     # 🔴 **전용 ns addon 이 처음 들어오면서 Namespace 를 열어야 한다.**
     #    CreateNamespace=true 로 자동 생성되는 Namespace 는 **이 목록의 검사를 받는다** —
