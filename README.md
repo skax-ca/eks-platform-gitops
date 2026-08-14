@@ -148,8 +148,8 @@ grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --inc
 
 ### addon 네임스페이스 규칙
 
-계층 2(GitOps helm addon)는 addon마다 전용 네임스페이스를 신설한다. **예외는 둘뿐 —
-`aws-load-balancer-controller`·`karpenter` → `kube-system`.**
+계층 2(GitOps helm addon)는 addon마다 전용 네임스페이스를 신설한다. **예외는 셋 —
+`aws-load-balancer-controller`·`karpenter`·`cluster-autoscaler` → `kube-system`.**
 
 ⛔ 예외를 늘리려면 아래에 준하는 근거가 필요하다. *"차트 기본값이 `kube-system`이라서"*는 근거가
 아니다.
@@ -159,6 +159,13 @@ grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --inc
 | 1 | Karpenter 공식이 이유까지 밝힌다 — `kube-system`의 호출만 `system-leader-election`·`kube-system-service-accounts` FlowSchema를 타고 우선순위를 받는다. 다른 ns면 custom FlowSchema를 직접 소유해야 한다 | 🔑 기술적(APF) — 어기면 apiserver 스로틀링 때 Karpenter가 굶는다 |
 | 2 | ALBC도 공식이 `kube-system` — AWS EKS User Guide·upstream kubernetes-sigs 둘 다 | 관례 |
 | 3 | Pod Identity association이 이미 `kube-system` | 집행 장치 — 어기면 자격증명이 안 붙는다 |
+
+⚠️ **`cluster-autoscaler`는 이 표의 바를 통과하지 못한 채로 예외에 들어갔다.** 공식 문서 근거도,
+APF 같은 기술적 강제도 없다 — Terraform 쪽 Pod Identity association을 `kube-system/
+cluster-autoscaler`로 **먼저** 고정한 뒤(사용자가 관례로 선택, `iac-module-library`
+`docs/02-choose-your-path.md` 참조) 이 매니페스트가 거기 맞춘 것이라, 위 근거 3(집행 장치)과
+인과가 반대다 — association이 원인이 아니라 결과다. 그래서 근거 3과 같은 층으로 세지 않고
+정직하게 약한 예외로 남겨 둔다. 새 예외를 추가할 때 이 항목을 전례로 들지 않는다.
 
 전용 ns addon을 추가할 때는 `syncPolicy.syncOptions`에 `CreateNamespace=true`를 넣는다. 자동 생성된
 Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{group: "", kind: Namespace}`를
@@ -177,6 +184,7 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 | `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | baseline |
 | `kyverno` + `kyverno-policies` | `kyverno.github.io/kyverno` | 3.8.2 | `kyverno` | baseline, `CreateNamespace=true` |
 | `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | opt-in 카탈로그(cluster Secret 라벨 `addon-keda: enabled`) |
+| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0 | `kube-system` | opt-in 카탈로그(cluster Secret 라벨 `addon-cluster-autoscaler: enabled`) — dev는 아직 미구독 |
 
 Kyverno는 Audit 모드(`validationFailureAction: Audit`, `failurePolicy: Ignore`)로 운영한다 — 웹훅에
 닿지 못해도 백그라운드 스캔이 PolicyReport를 계속 만든다. `argocd` 네임스페이스는 Kyverno 웹훅의
