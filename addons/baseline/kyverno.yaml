@@ -29,7 +29,7 @@
 #
 # 🔴 Terraform 전제: **없다.** IAM·SQS 를 요구하지 않는다 ⇒ 이 증분은 계층 2 안에서 닫힌다.
 #
-# 🖼️ 이미지: reg.kyverno.io — **GHCR 앞의 vanity 도메인**이다(401 응답의
+# **이미지**: reg.kyverno.io — **GHCR 앞의 vanity 도메인**이다(401 응답의
 #    www-authenticate realm 이 https://ghcr.io/token, x-github-request-id 헤더로 확인).
 #    ⇒ 노드가 **reg.kyverno.io 와 ghcr.io 둘 다** 나가야 한다.
 #    ⚠️ **egress canary 는 이것을 판정할 수 없다** — canary 는 repo-server 의 차트 fetch 만 본다.

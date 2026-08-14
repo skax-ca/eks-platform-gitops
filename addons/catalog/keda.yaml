@@ -6,7 +6,7 @@
 #    옵트인해야 배포되는 카탈로그 addon 의 실물 예시다.
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# 🔀 **①baseline 과 갈리는 지점은 generator 의 matchLabels 하나뿐이다**
+# **①baseline 과 갈리는 지점은 generator 의 matchLabels 하나뿐이다**
 #
 #    ① baseline  : matchLabels {environment: dev}      → 전 클러스터 자동
 #    ② catalog   : matchLabels {addon-keda: enabled}   → **구독한 클러스터만**
@@ -32,7 +32,7 @@
 #    ⚠️ AWS 스케일러 요구가 생기면 modules/eks-cluster/iam.tf 에 keda/keda-operator association 을
 #       연다. **가역적이다** — ALBC·external-dns 와 같은 패턴이라 새로 발명할 것이 없다.
 #
-# 🖼️ 이미지: ghcr.io/kedacore/{keda,keda-metrics-apiserver,keda-admission-webhooks}
+# **이미지**: ghcr.io/kedacore/{keda,keda-metrics-apiserver,keda-admission-webhooks}
 #    ✅ arm64 확인 완료 — 3개 전부 manifest index 에 linux/arm64(이 클러스터는 Graviton).
 #    ⚠️ **egress canary 는 이미지 pull 을 판정할 수 없다** — canary 는 repo-server 의 차트 fetch 만
 #       본다. 이미지 pull 은 kubelet→NAT 로 경로가 다르다 — kyverno 와 함께 ghcr.io 첫 사용이다.

@@ -1,6 +1,7 @@
 # Cluster Autoscaler — ②opt-in 카탈로그 addon (managed_node_groups 오토스케일링)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT, `07-runbooks.md` §9)
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT — `07-runbooks.md`의
+#       「Karpenter + Cluster Autoscaler 동시 운영 — taint 전략」절)
 #
 # **KEDA 와 같은 카탈로그 패턴** — matchLabels {addon-cluster-autoscaler: enabled} 인 클러스터에만
 #    팬아웃한다. Karpenter(baseline, 전 클러스터)와 달리 **선택**이다 — "app 워크로드는 전부
@@ -35,13 +36,13 @@
 #    "근거 3"(집행 장치)과 같은 층으로 세지 않는다. **지금 바꾸려면 두 저장소(Terraform
 #    association + 이 매니페스트)를 함께 고쳐야 한다**는 사실만 정직하게 남긴다.
 #
-# 🖼️ chart: 실측 — `helm repo add autoscaler https://kubernetes.github.io/autoscaler` 로
+# **chart 실측** — `helm repo add autoscaler https://kubernetes.github.io/autoscaler` 로
 #    전수(120개 버전) 조회, appVersion(CA 자체 버전)이 클러스터 k8s 마이너(1.35)와 정확히
 #    일치하는 것 중 최신 = 9.59.0(appVersion 1.35.0). cross-version 은 상류가 테스트·지원하지
 #    않는다(AWS EKS Best Practices Guide) — k8s 를 올릴 때 이 값도 함께 올린다.
 #    chart 에 kubeVersion 제약은 없다(KEDA 와 다름 — 실측: `helm show chart`).
 #
-# 🖼️ cluster-scoped 리소스: `helm template` 로컬 렌더 실측 — ClusterRole 1 · ClusterRoleBinding 1
+# **cluster-scoped 리소스 실측**: `helm template` 로컬 렌더 — ClusterRole 1 · ClusterRoleBinding 1
 #    뿐이다(CRD·APIService 없음). 둘 다 `projects/platform.yaml`의 ALBC 항목과 겹친다 ⇒
 #    clusterResourceWhitelist 에 **추가할 것이 없다**(Karpenter 와 같은 결론).
 #
@@ -97,7 +98,8 @@ spec:
             # 비어 있다(실측) — 그래서 이 매니페스트가 명시로 채운다.
             # 🔑 managed_node_groups 에 아직 workload-class=system taint 가 없으므로 지금은
             #    이 negative affinity 가 유일한 자기보호 장치다. taint 가 생기면
-            #    nodeSelector: workload-class=system 을 추가로 얹는다(07-runbooks.md §9).
+            #    nodeSelector: workload-class=system 을 추가로 얹는다(`07-runbooks.md`의
+            #    「Karpenter + Cluster Autoscaler 동시 운영 — taint 전략」절 참조).
             affinity:
               nodeAffinity:
                 requiredDuringSchedulingIgnoredDuringExecution:
