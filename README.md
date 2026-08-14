@@ -176,6 +176,13 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 
 ## 현재 배포된 addon
 
+**baseline vs catalog 판단 기준**: Terraform 쪽 `enable_*` 기본값을 따르지 않는다 —
+`aws-load-balancer-controller`가 반증 사례다(Terraform 기본값은 `false`인데도 baseline).
+가르는 축은 **워크로드 아키텍처와 무관하게 플랫폼이 보편적으로 요구하는가**다.
+baseline(ALBC·Karpenter·Kyverno)은 전 클러스터에 무조건 깔리고, catalog(KEDA·
+cluster-autoscaler)는 **특정 아키텍처를 선택한 클러스터만** `addon-<name>: enabled`
+라벨로 구독한다.
+
 | addon | chart | 버전 | namespace | 배포 방식 |
 |---|---|---|---|---|
 | `argocd`(자기 관리) | `argoproj.github.io/argo-helm` / `argo-cd` | 10.3.0 | `argocd` | seed 흡수, `automated.selfHeal: true` · `prune: false` |
