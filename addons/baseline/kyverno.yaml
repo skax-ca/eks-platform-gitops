@@ -11,8 +11,11 @@
 #    ③ 커스텀 정책(ClusterPolicy, 이 저장소가 직접 소유) — Karpenter 자원 요구사항 강제 (sync-wave 5)
 #    ⚠️ ②와 ③은 소유권이 다르다 — ②는 업스트림 차트 하나로 source가 고정돼 있어 임의의
 #       새 정책을 주입할 수 없다. 그래서 우리가 직접 만든 정책은 ③으로 형제 Application을
-#       따로 둔다(addons/kyverno/custom-policies/ 참조, 그 파일은 root-app 자기 스캔에서
-#       마커로 빠진다 — Karpenter NodePool과 같은 이유).
+#       따로 둔다(addons/kyverno/custom-policies/, Karpenter NodePool과 같은 이유로
+#       로컬 helm 차트다 — 값이 갈려서가 아니라 Chart.yaml이 있어야 이 Application 자신이
+#       Helm 타입으로 인식돼 skip-file-rendering 마커가 "root-app만 제외"로 동작하기
+#       때문이다. Chart.yaml 없이 plain 매니페스트로 뒀다가 이 Application 자신도
+#       Directory 타입으로 잡혀 자기 담당 파일을 걸러버린 사고가 있었다, 2026-08-18).
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # 네임스페이스 = **kyverno (전용 ns 신설)** — 이 repo의 네임스페이스 기본 규칙이다.
@@ -196,9 +199,10 @@ spec:
     spec:
       project: platform
       source:
-        # 이 저장소가 직접 소유하는 정책 — 클러스터마다 값이 갈리지 않아 helm 없이
-        # plain 매니페스트로 둔다(addons/kyverno/custom-policies/, root-app 자기 스캔에서는
-        # 마커로 빠진다).
+        # 이 저장소가 직접 소유하는 정책 — 로컬 helm 차트(addons/kyverno/custom-policies/,
+        # Chart.yaml 존재)라서 이 Application은 Helm 타입으로 렌더링되고, root-app의
+        # 최상위 Directory 스캔만 templates/ 안의 마커로 걸러진다. 값이 갈리지 않는데도
+        # 차트인 이유는 Chart.yaml 헤더 참조.
         repoURL: https://github.com/skax-ca/iac-platform-gitops.git
         targetRevision: main
         path: addons/kyverno/custom-policies
