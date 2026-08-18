@@ -46,6 +46,7 @@ projects/                    # AppProject 가드레일 — platform.yaml + <team
 addons/baseline/             # 전 클러스터 팬아웃 ApplicationSet(environment 라벨)
 addons/catalog/              # opt-in 카탈로그 — 구독한 클러스터만(addon-<name> 라벨)
 addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root App 스캔에서 제외됨
+addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPolicy. 로컬 helm 차트, root App 스캔에서 제외됨
 ```
 
 **확장 규칙(O(1))**: 새 클러스터는 `clusters/<env>/<cluster>/` 1개만 추가하면 cluster generator가
@@ -121,9 +122,18 @@ diff <(grep -v '^#V#' bootstrap/argocd-seed.sh) <module-repo>/scripts/argocd-see
 **자기 점검**(의도 밖 파일이 마커를 물고 있지 않은지):
 ```bash
 grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --include='*.json' . \
-  | grep -v 'addons/karpenter/nodepool/'
+  | grep -v -e 'addons/karpenter/nodepool/' -e 'addons/kyverno/custom-policies/'
 ```
-출력이 있으면 그 파일은 조용히 스캔에서 빠지고 있다.
+출력이 있으면 그 파일은 조용히 스캔에서 빠지고 있다. 새 로컬 helm 차트 디렉토리를 추가할 때마다
+이 `-e` 목록에도 그 경로를 더한다 — 안 그러면 이 명령 자체가 정상적인 마커를 "문제"로 오탐한다.
+
+⚠️ **마커는 root-app만 빼는 게 아니라 "Directory 타입으로 이 파일을 읽는 모든 Application"에서
+뺀다.** 그 파일을 전담하는 Application이 있다면, `Chart.yaml`이 없어 그 Application도 Directory
+타입으로 잡힐 경우 **자기 자신도 자기 담당 파일을 걸러버린다** — 적용 리소스 0개인 채로
+`Synced`/`Healthy`로 보이는 조용한 실패라 알아채기 어렵다(`addons/kyverno/custom-policies/`에서
+실제 발생, 2026-08-18). 전담 Application이 있는 디렉토리는 **클러스터별 값이 갈리지 않아도**
+`Chart.yaml`을 둬서 그 Application이 Helm 타입으로 인식되게 한다 — 마커는 텍스트 스캔이라
+Helm 렌더링 엔진은 그냥 주석으로 무시한다.
 
 **`argocd-seed.sh`는 `.sh`라 애초에 directory 소스의 스캔 대상(`.yaml`/`.yml`/`.json`)이 아니다** —
 그래서 `exclude`에도, 마커에도 넣지 않는다.
