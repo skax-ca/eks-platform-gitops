@@ -5,10 +5,14 @@
 # **①baseline 인 이유**: 정책 엔진은 **가드레일**이고, **옵트인 가드레일은 가드레일이
 #    아니다.** ALBC·Karpenter 와 같은 층에 둔다.
 #
-# ApplicationSet 이 **2개**인 이유는 CRD 순서다 — Karpenter 와 **같은 형태**이고
-#    파일은 하나로 유지한다(O(1)).
+# ApplicationSet 이 **3개**인 이유는 CRD 순서 + 소유권 분리다 — 파일은 하나로 유지한다(O(1)).
 #    ① 컨트롤러 helm — 차트가 ClusterPolicy 등 CRD 22개를 동봉한다        (sync-wave 0)
-#    ② PSS 정책(ClusterPolicy 11개) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
+#    ② PSS 정책(ClusterPolicy 11개, 업스트림 kyverno-policies 차트)         (sync-wave 5)
+#    ③ 커스텀 정책(ClusterPolicy, 이 저장소가 직접 소유) — Karpenter 자원 요구사항 강제 (sync-wave 5)
+#    ⚠️ ②와 ③은 소유권이 다르다 — ②는 업스트림 차트 하나로 source가 고정돼 있어 임의의
+#       새 정책을 주입할 수 없다. 그래서 우리가 직접 만든 정책은 ③으로 형제 Application을
+#       따로 둔다(addons/kyverno/custom-policies/ 참조, 그 파일은 root-app 자기 스캔에서
+#       마커로 빠진다 — Karpenter NodePool과 같은 이유).
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # 네임스페이스 = **kyverno (전용 ns 신설)** — 이 repo의 네임스페이스 기본 규칙이다.
@@ -160,6 +164,46 @@ spec:
       destination:
         server: '{{server}}'
         # ClusterPolicy 는 cluster-scoped 라 이 ns 는 형식상 값이다(Karpenter CR 과 같다).
+        namespace: kyverno
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
+          - SkipDryRunOnMissingResource=true
+          - ServerSideApply=true
+---
+# ────────────────────────────────────────────────────────────────────────────
+# ③ 커스텀 정책 — Karpenter 자원 요구사항 강제 (계층 2가 직접 소유하는 정책)
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kyverno-custom-policies
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            environment: dev
+  template:
+    metadata:
+      name: '{{name}}-kyverno-custom-policies'
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+    spec:
+      project: platform
+      source:
+        # 이 저장소가 직접 소유하는 정책 — 클러스터마다 값이 갈리지 않아 helm 없이
+        # plain 매니페스트로 둔다(addons/kyverno/custom-policies/, root-app 자기 스캔에서는
+        # 마커로 빠진다).
+        repoURL: https://github.com/skax-ca/iac-platform-gitops.git
+        targetRevision: main
+        path: addons/kyverno/custom-policies
+      destination:
+        server: '{{server}}'
         namespace: kyverno
       syncPolicy:
         automated:
