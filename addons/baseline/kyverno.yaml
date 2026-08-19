@@ -84,7 +84,22 @@ spec:
         # chart kubeVersion `>=1.25.0-0` · 클러스터 1.35.6 ⇒ 충족.
         # kyverno-policies 와 **같은 번호로 함께 릴리스된다** ⇒ 스큐 판단이 필요 없다. 올릴 땐 둘 다.
         targetRevision: 3.8.2
-        # ⛔ helm values 를 넘기지 않는다 — 차트 기본값을 그대로 받는 것이 이 증분의 결정이다.
+        # ⚠️ tolerations 하나만 예외로 넘긴다 — "기본값을 그대로 받는다"는 결정은 유지하되
+        #    (기능적 기본값은 안 건드린다), 이건 기능이 아니라 **스케줄 전제**다.
+        #    system 관리형 노드그룹의 workload-class=system NoSchedule taint를 hub 실제
+        #    seed(2026-08-19)에서 발견 — 컨트롤러 4종 전부 Pending 이었다. 차트 실측
+        #    (helm show values kyverno/kyverno 3.8.2)으로 top-level global.tolerations 확인,
+        #    렌더(helm template --set-json)로 컨트롤러 4종 전부에 전파됨을 실측 확인.
+        helm:
+          values: |
+            global:
+              tolerations:
+                - key: workload-class
+                  operator: Equal
+                  value: system
+                  effect: NoSchedule
+        #
+        # ⛔ 나머지 helm values 를 넘기지 않는다 — 차트 기본값을 그대로 받는 것이 이 증분의 결정이다.
         #    (기본값과 다른 것만 적는다. 아래 "기본값을 유지하는 것" 참조)
         #
         # 기본값을 유지하는 것 — 판단의 기록:
