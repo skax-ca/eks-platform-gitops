@@ -77,6 +77,16 @@ spec:
             - name: vpcTags.Name
               value: '{{metadata.labels.vpcName}}'
           values: |
+            # system 관리형 노드그룹의 workload-class=system NoSchedule taint를 넘는다.
+            #   ⚠️ hub 실제 seed(2026-08-19)에서 발견 — Karpenter 가 아직 없는 부트스트랩
+            #      시점에는 이 2노드가 유일한 스케줄 대상이다. 차트 실측(helm show values
+            #      eks-charts/aws-load-balancer-controller 3.5.0)으로 top-level tolerations
+            #      키 확인(argo-cd 의 global.tolerations 와 달리 여기는 이 이름 그대로다).
+            tolerations:
+              - key: workload-class
+                operator: Equal
+                value: system
+                effect: NoSchedule
             # Pod Identity 바인딩 대상. IRSA 애노테이션은 불필요하다 — association 이 이미 있다.
             serviceAccount:
               create: true

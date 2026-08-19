@@ -87,6 +87,17 @@ spec:
             - name: settings.interruptionQueue
               value: 'Karpenter-{{name}}'
           values: |
+            # system 관리형 노드그룹의 workload-class=system NoSchedule taint를 넘는다.
+            #   ⚠️ hub 실제 seed(2026-08-19)에서 발견 — **Karpenter 자신이 부트스트랩 문제다**:
+            #      Karpenter 가 없으면 non-system 노드가 생기지 않고, 그 노드가 없으면 이
+            #      2노드(system)가 유일한 스케줄 대상이라 Karpenter 도 여기서 시작해야 한다.
+            #      차트 실측(helm show values oci://public.ecr.aws/karpenter/karpenter 1.14.0)으로
+            #      top-level tolerations 키 확인.
+            tolerations:
+              - key: workload-class
+                operator: Equal
+                value: system
+                effect: NoSchedule
             # Pod Identity 바인딩 대상(kube-system/karpenter). IRSA 애노테이션 불필요.
             serviceAccount:
               create: true
