@@ -6,13 +6,13 @@
 #    옵트인해야 배포되는 카탈로그 addon 의 실물 예시다.
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# **①baseline 과 갈리는 지점은 generator 의 matchLabels 하나뿐이다**
+# **①baseline 과 갈리는 지점은 generator selector 하나뿐이다**
 #
-#    ① baseline  : matchLabels {environment: dev}      → 전 클러스터 자동
-#    ② catalog   : matchLabels {addon-keda: enabled}   → **구독한 클러스터만**
+#    ① baseline  : matchExpressions [{key: environment, operator: Exists}]  → 전 클러스터 자동
+#    ② catalog   : matchLabels {addon-keda: enabled}                        → **구독한 클러스터만**
 #
 #    ⇒ 구독은 cluster Secret 에 라벨을 다는 것으로 이뤄진다
-#      (clusters/dev/eks-demo-dev-an2-main-01/cluster-secret.yaml).
+#      (clusters/<env>/<cluster>/cluster-secret.yaml).
 #    🔑 **플랫폼이 무엇을·어떤 버전으로 승인하고, 팀은 쓸지를 라벨로 옵트인**하는 것이
 #       실물에서 뜻하는 바가 이것이다 — **paved road**.
 #
