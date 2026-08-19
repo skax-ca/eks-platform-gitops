@@ -34,8 +34,12 @@ spec:
     #    우리가 cluster Secret 을 명시적으로 만든 이유가 이것이다.
     - clusters:
         selector:
-          matchLabels:
-            environment: dev
+          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
+          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
+          # 라벨 자체가 없어 여기 걸리지 않는다(우리가 cluster Secret 을 만든 이유와 같은 근거).
+          matchExpressions:
+            - key: environment
+              operator: Exists
   template:
     metadata:
       name: '{{name}}-aws-lbc'
