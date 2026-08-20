@@ -75,6 +75,10 @@ spec:
         # 🔑 OCI 태그가 곧 chart 버전이다 — GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
         targetRevision: 1.14.0
         helm:
+          # Application 이름({{name}}-karpenter)과 release 이름을 분리한다 — 근거는
+          # aws-load-balancer-controller.yaml과 같다.
+          # 계약: iac-module-library docs/02-choose-your-path.md
+          releaseName: karpenter
           parameters:
             # 이 값이 없으면 helm template 이 실패한다:
             #   "Chart cannot be installed without a valid settings.clusterName!"

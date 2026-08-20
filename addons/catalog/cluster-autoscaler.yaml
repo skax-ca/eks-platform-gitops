@@ -71,6 +71,10 @@ spec:
         chart: cluster-autoscaler
         targetRevision: 9.59.0
         helm:
+          # Application 이름({{name}}-cluster-autoscaler)과 release 이름을 분리한다 —
+          # 이 addon이 DNS-1123 63자 제한에 실제로 걸려 이름이 잘렸던 사례가 이 결정의 근거다.
+          # 계약: iac-module-library docs/02-choose-your-path.md
+          releaseName: cluster-autoscaler
           parameters:
             # autoDiscovery.tags 기본값이 이미
             #   k8s.io/cluster-autoscaler/enabled · k8s.io/cluster-autoscaler/{{clusterName}}

@@ -54,6 +54,10 @@ spec:
         # ⚠️ 올릴 때는 canary 로 다시 확인한다 — 기존 핀 값을 여기 남기지 않는다(git이 이력을 갖는다).
         targetRevision: 3.5.0
         helm:
+          # Application 이름({{name}}-aws-lbc)과 release 이름을 분리한다 — release 이름이
+          # 없으면 그대로 리소스 이름에 전파돼 63자 제한에 걸릴 수 있다.
+          # 계약: iac-module-library docs/02-choose-your-path.md
+          releaseName: aws-lbc
           parameters:
             # ALBC 필수 — 실제 EKS 클러스터명이어야 한다.
             # 🔑 cluster Secret 의 이름이 곧 {{name}} 이다. 별칭을 쓰면 **조용히 틀린다**.
