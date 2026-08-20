@@ -60,9 +60,30 @@ spec:
         # 실측 핀 — index.yaml 전수 78개 중 stable 72개를 semver 정렬한 최신.
         # chart kubeVersion `>=v1.23.0-0` · 클러스터 1.35.6 ⇒ 충족.
         targetRevision: 2.20.2
-        # ⛔ helm values 를 넘기지 않는다 — 차트 기본값 그대로가 이 증분의 결정이다.
+        helm:
+          values: |
+            # system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations) —
+            # cluster-autoscaler·coredns·metrics-server 와 동일 패턴(iac-reference-infra
+            # main.tf 의 workload_class_toleration local). 차트 최상위 nodeSelector/
+            # tolerations 는 operator·metricsServer·webhooks 3개 컴포넌트 전부에 공통
+            # 적용된다(실측: `helm show values kedacore/keda --version 2.20.2`).
+            #
+            # 정정(2026-08-20): 최초엔 "차트 기본값 그대로"로 뒀으나(아래 판단 기록 참조),
+            # 그 결과 KEDA 3개 파드가 유일하게 system taint 를 못 넘어 Karpenter 가 만든
+            # spot 노드로 밀려나는 것을 hub·dev 양쪽에서 실측 확인했다. keda-admission-webhooks
+            # 는 cert-manager-webhook 과 같은 admission webhook 계열인데 다른 컨트롤러
+            # (argocd·cert-manager·kyverno·aws-lbc·cluster-autoscaler·karpenter 자신)는
+            # 전부 system 고정인 것과 어긋나 있었다 — spot 노드 회수 시 operator·webhook 이
+            # 동시에 죽어 오토스케일링 정지 + ScaledObject/ScaledJob CRUD 차단으로 이어진다.
+            nodeSelector:
+              workload-class: system
+            tolerations:
+              - key: workload-class
+                operator: Equal
+                value: system
+                effect: NoSchedule
         #
-        # 기본값을 유지하는 것 — 판단의 기록:
+        # 기본값을 유지하는 것 — 판단의 기록(스케줄링 값 외 나머지는 그대로 유효):
         #  · operator·metrics-apiserver·admission-webhooks 각 replicas: 1. podAntiAffinity 없음.
         #    dev 2노드에 무리 없다.
         #  · ⛔ AWS 스케일러용 podIdentity 설정을 켜지 않는다 — 위 "Terraform 전제: 없다" 참조.
