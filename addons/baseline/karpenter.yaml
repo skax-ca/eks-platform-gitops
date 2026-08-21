@@ -58,6 +58,11 @@ spec:
   template:
     metadata:
       name: '{{name}}-karpenter'
+      # 이 finalizer가 없으면 Application CR을 지워도(cluster generator가 더 이상
+      # 발견 못 하는 경우 포함) 실제로 만든 리소스(Deployment 등)는 클러스터에 orphan으로
+      # 남는다 — spoke teardown 리허설(2026-08-21)에서 실측 발견.
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
       annotations:
         # CR(②)보다 먼저 만들어지게 한다. ⚠️ wave 는 생성 순서를 정할 뿐 sync 완료를 기다리지 않는다 —
         #    실제 안전장치는 ②의 SkipDryRunOnMissingResource 와 ArgoCD 의 재시도다.
@@ -141,6 +146,8 @@ spec:
   template:
     metadata:
       name: '{{name}}-karpenter-nodepool'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
       annotations:
         argocd.argoproj.io/sync-wave: "5"
     spec:

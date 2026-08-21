@@ -65,6 +65,11 @@ spec:
   template:
     metadata:
       name: '{{name}}-kyverno'
+      # 이 finalizer가 없으면 Application CR을 지워도 실제 리소스는 클러스터에
+      # orphan으로 남는다 — spoke teardown 리허설(2026-08-21)에서 실측 발견
+      # (addons/baseline/karpenter.yaml 헤더 참조).
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
       annotations:
         # 정책(②)보다 먼저. ⚠️ wave 는 생성 순서만 정하고 sync 완료를 기다리지 않는다 —
         #    실제 안전장치는 ②의 SkipDryRunOnMissingResource 다.
@@ -147,6 +152,8 @@ spec:
   template:
     metadata:
       name: '{{name}}-kyverno-policies'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
       annotations:
         argocd.argoproj.io/sync-wave: "5"
         # 🔴 ClusterPolicy 11개도 `ServerSideDiff` 없이는 영구 `OutOfSync` 다 — ①의 CRD 와
@@ -221,6 +228,8 @@ spec:
   template:
     metadata:
       name: '{{name}}-kyverno-custom-policies'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
       annotations:
         argocd.argoproj.io/sync-wave: "5"
         # 🔴 ClusterPolicy CRD도 ②(kyverno-policies)와 같은 병이 있다 — 실측(2026-08-18,
