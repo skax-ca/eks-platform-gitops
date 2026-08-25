@@ -160,7 +160,7 @@ spec:
         #       ⚠️ 그 마커 문자열을 이 주석에 그대로 적지 않는다 — 판정이 파일 전체 문자열
         #       포함 검사라 적으면 **이 파일 자신**이 스캔에서 빠진다(2026-08-18 실제 발생 확인,
         #       a3869b2 커밋이 이 문장을 쓰면서 바로 이 사고를 냈다).
-        repoURL: https://github.com/skax-ca/iac-platform-gitops.git
+        repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/karpenter/nodepool
         helm:

@@ -246,7 +246,7 @@ spec:
         # Chart.yaml 존재)라서 이 Application은 Helm 타입으로 렌더링되고, root-app의
         # 최상위 Directory 스캔만 templates/ 안의 마커로 걸러진다. 값이 갈리지 않는데도
         # 차트인 이유는 Chart.yaml 헤더 참조.
-        repoURL: https://github.com/skax-ca/iac-platform-gitops.git
+        repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/kyverno/custom-policies
       destination:

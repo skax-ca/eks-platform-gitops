@@ -19,7 +19,7 @@ spec:
     # self-managed 는 GitHub 를 직접 읽는다. 인증은 **GitHub App** repository Secret 이다.
     # ⚠️ 관리형 Capability 로 전환하면 여기에 CodeConnections 프록시 URL 을 쓴다 —
     #    그 URL 은 account-id·region·connection-id 를 포함해 환경마다 다르다.
-    repoURL: https://github.com/skax-ca/iac-platform-gitops.git
+    repoURL: https://github.com/skax-ca/eks-platform-gitops.git
     targetRevision: main
     # 저장소 루트 전체를 스캔한다 — projects/·clusters/·addons/ 가 모두 대상이며,
     # 새 디렉토리가 늘어도 이 파일은 불변이다(README "확장 규칙(O(1))").

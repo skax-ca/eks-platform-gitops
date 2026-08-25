@@ -68,7 +68,7 @@ spec:
         helm:
           values: |
             # system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations) —
-            # cluster-autoscaler·coredns·metrics-server 와 동일 패턴(iac-reference-infra
+            # cluster-autoscaler·coredns·metrics-server 와 동일 패턴(eks-reference-infra
             # main.tf 의 workload_class_toleration local). 차트 최상위 nodeSelector/
             # tolerations 는 operator·metricsServer·webhooks 3개 컴포넌트 전부에 공통
             # 적용된다(실측: `helm show values kedacore/keda --version 2.20.2`).

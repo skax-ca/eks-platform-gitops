@@ -1,8 +1,8 @@
-# iac-platform-gitops
+# eks-platform-gitops
 
 **읽는 사람**: 이 저장소의 매니페스트를 고치거나, 클러스터·addon을 새로 등록하는 사람.
 
-**오너**: GitHub org [`skax-ca`](https://github.com/skax-ca) 소속. 설계 문의는 `iac-module-library`, 클러스터·IAM 문의는 `iac-reference-infra` 쪽과 겹칠 수 있다 — 아래 "다루는 것 / 다루지 않는 것" 참고.
+**오너**: GitHub org [`skax-ca`](https://github.com/skax-ca) 소속. 설계 문의는 `iac-module-library`, 클러스터·IAM 문의는 `eks-reference-infra` 쪽과 겹칠 수 있다 — 아래 "다루는 것 / 다루지 않는 것" 참고.
 
 **플랫폼 GitOps monorepo(계층 2)** — ArgoCD가 pull로 reconcile하는 플랫폼 소관 매니페스트 저장소.
 
@@ -44,7 +44,7 @@ Application / ApplicationSet / AppProject 자체는 양쪽이 동일하다.
 
 | 계층 | 무엇 | 어디 |
 |---|---|---|
-| 1. Terraform | 클러스터·baseline addon·IAM·Access Entry | `skax-ca/iac-reference-infra` |
+| 1. Terraform | 클러스터·baseline addon·IAM·Access Entry | `skax-ca/eks-reference-infra` |
 | **2. 플랫폼 GitOps** | **helm addon · 클러스터 등록 · AppProject 가드레일** | **이 저장소** |
 | 3. 앱 GitOps | 비즈니스 워크로드 | 앱팀별 repo(범위 밖) |
 

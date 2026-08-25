@@ -18,7 +18,7 @@
 #      만들 필요가 없다(실측: `terraform-aws-modules/terraform-aws-eks#1886`).
 #
 # ✅ **dev 클러스터는 이 addon 을 구독한다**(cluster Secret 라벨, 2026-08-14) —
-#    `managed_node_groups.system`에 `workload-class=system` taint 가 `iac-reference-infra`
+#    `managed_node_groups.system`에 `workload-class=system` taint 가 `eks-reference-infra`
 #    PR #32·#33 으로 이미 반영·실측 검증됐다. taint 분리 없이 CA 를 켜면 CA 가 `system`
 #    노드그룹 전체를 auto-discover 해 Karpenter 와 같은 pending pod 를 두고 경쟁할 수 있었는데
 #    (근거: `aws/karpenter-provider-aws#2543`), 아래 `nodeSelector`+`tolerations`가 그 경쟁을
@@ -102,7 +102,7 @@ spec:
 
             # 자기 자신이 관리하는(=Karpenter 가 만든) 노드에는 못 뜨게 막는다. Karpenter 차트는
             # 이 보호가 기본값으로 내장돼 있지만(`karpenter.sh/nodepool DoesNotExist`,
-            # iac-reference-infra 의 system 노드그룹 주석 참조) CA 차트는 affinity 기본값이
+            # eks-reference-infra 의 system 노드그룹 주석 참조) CA 차트는 affinity 기본값이
             # 비어 있다(실측) — 그래서 이 매니페스트가 명시로 채운다.
             affinity:
               nodeAffinity:

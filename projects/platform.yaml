@@ -25,7 +25,7 @@ spec:
   # addon 을 추가할 때마다 그 chart repo 를 여기 추가한다(addon마다 리뷰 지점).
   sourceRepos:
     # 이 저장소 — seed 매니페스트 + Karpenter CR 로컬 차트(addons/karpenter/nodepool).
-    - https://github.com/skax-ca/iac-platform-gitops.git
+    - https://github.com/skax-ca/eks-platform-gitops.git
     # ── ALBC ──
     # egress 확인 완료: repo-server 가 이 호스트에 닿는다(canary revision 3.5.0 · rendered 17).
     - https://aws.github.io/eks-charts

@@ -73,7 +73,7 @@ spec:
           - $values/bootstrap/argocd-values.yaml
 
     # 값 참조 전용 source — `ref` 만 있고 path/chart 가 없으므로 **렌더 대상이 아니다.**
-    - repoURL: https://github.com/skax-ca/iac-platform-gitops.git
+    - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
       targetRevision: main
       ref: values
 

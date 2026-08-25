@@ -80,9 +80,9 @@ GitOps 저장소를 pull 하는 self-managed ArgoCD 를 부트스트랩한다.
   ARGOCD_RELEASE        기본 argocd
 
 예시
-  export GITOPS_REPO_DIR=~/iac-platform-gitops
+  export GITOPS_REPO_DIR=~/eks-platform-gitops
   export CLUSTER_DIR=clusters/dev/eks-ref-dev-an2-main-01
-  export GITOPS_REPO_URL=https://github.com/skax-ca/iac-platform-gitops.git
+  export GITOPS_REPO_URL=https://github.com/skax-ca/eks-platform-gitops.git
   export GH_APP_ID=4512318 GH_APP_INSTALLATION_ID=... GH_APP_PRIVATE_KEY=~/key.pem
   ./argocd-seed.sh --dry-run     # 먼저 이것부터 돌린다
   ./argocd-seed.sh
