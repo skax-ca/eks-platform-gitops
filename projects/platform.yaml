@@ -126,6 +126,14 @@ spec:
     - { group: apiregistration.k8s.io, kind: APIService }
     # KEDA 의 나머지 cluster-scoped(CRD 6 · ClusterRole 4 · CRB 5 ·
     #    ValidatingWebhookConfiguration 1)는 전부 위 ALBC 항목과 겹친다 ⇒ 추가 0건(렌더로 확인).
+    # ── Gateway API 표준 CRD ──
+    # 🔴 실측 실패로 발견 — `config/crd/standard` 디렉토리가 "CRD 11개"가 아니라 CRD 10개 +
+    #    ValidatingAdmissionPolicy/Binding 1쌍(`gateway.networking.k8s.io_vap_safeupgrades.yaml`,
+    #    GatewayClass 재검증용 안전장치)이다. CRD 자체는 위 ALBC 항목(apiextensions.k8s.io/
+    #    CustomResourceDefinition)과 겹치지만 이 둘은 새 kind라 별도로 열어야 했다 — 실제
+    #    Application이 "is not permitted in project" InvalidSpecError로 막힌 뒤에야 드러났다.
+    - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicy }
+    - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding }
 
   # namespace 스코프는 전면 허용 — 플랫폼 계층은 관리자 tier 다.
   namespaceResourceWhitelist:
