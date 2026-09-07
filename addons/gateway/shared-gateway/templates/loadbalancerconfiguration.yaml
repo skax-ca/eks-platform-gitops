@@ -17,3 +17,7 @@ spec:
   tags:
     workload: demo
     env: {{ $environment | quote }}
+  # ⚠️ nil(필드 자체를 안 씀)과 빈 배열은 ALBC에서 다른 뜻이다 — nil이면 0.0.0.0/0·::/0 기본값,
+  # 빈 배열을 명시하면 그 기본값을 덮어써 인바운드 규칙이 0개가 된다. 근거·판단은
+  # values.yaml의 sourceRanges 주석 참조.
+  sourceRanges: {{ .Values.sourceRanges | toYaml | nindent 4 }}
