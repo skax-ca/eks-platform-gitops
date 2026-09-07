@@ -1,0 +1,64 @@
+# Gateway API 실사용 계층 — ①baseline addon (전 클러스터)
+#
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+#
+# 🔑 gateway-api-crds.yaml(CRD만 설치)의 다음 단계다 — 이 파일이 실제로 쓰는 리소스
+#    (GatewayClass·LoadBalancerConfiguration·Gateway)를 만든다. sync-wave를 5로 둬서 CRD가
+#    먼저 존재하게 한다(Karpenter의 컨트롤러(wave 0)→NodePool(wave 5) 패턴과 같은 이유).
+#
+# ⛔ HTTPRoute·백엔드 Service는 여기 없다 — 계층 3(앱 GitOps)은 이 저장소 범위 밖이다
+#    (README "이 저장소가 다루는 것 / 다루지 않는 것" 참조, ⛔ apps/ 디렉토리는 의도적으로 없다).
+#    앱팀은 이 Gateway를 parentRefs로 참조하는 HTTPRoute를 **자기 저장소**에 만든다.
+#
+# ⚠️ 이 리소스가 적용되는 순간 실제 ALB가 AWS에 생성된다(과금 시작) — HTTPRoute 유무와 무관하다.
+#    근거·scheme(internal) 판단은 addons/gateway/shared-gateway/values.yaml 헤더 참조.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gateway
+  namespace: argocd
+spec:
+  generators:
+    # 다른 baseline addon과 동일한 cluster generator — 근거는 aws-load-balancer-controller.yaml 헤더 참조.
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: environment
+              operator: Exists
+  template:
+    metadata:
+      name: '{{name}}-gateway'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        # gateway-api-crds(wave 0, 기본값)보다 반드시 뒤에 적용되게 한다. ⚠️ wave는 생성 순서만
+        # 정할 뿐 그 sync의 완료를 기다리지 않는다 — 실제 안전장치는 아래 SkipDryRunOnMissingResource다.
+        argocd.argoproj.io/sync-wave: "5"
+    spec:
+      project: platform
+      source:
+        # 이 저장소의 로컬 helm 차트다 — 이유는 addons/gateway/shared-gateway/Chart.yaml 참조.
+        # ⚠️ 그래서 이 경로의 파일들은 root-app 스캔에서 빠진다 — 마커 문자열을 이 주석에
+        # 그대로 적지 않는다(README "root App 스캔에서 파일을 빼는 방법" 절의 함정 참조).
+        repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+        targetRevision: main
+        path: addons/gateway/shared-gateway
+        helm:
+          parameters:
+            - name: environment
+              value: '{{metadata.labels.environment}}'
+      destination:
+        server: '{{server}}'
+        # 전용 ns 신설 — 이 repo 기본 규칙. ALBC·Karpenter의 kube-system 예외에 안 낀다
+        # (그 둘의 근거인 APF FlowSchema·Pod Identity association이 이 addon엔 없다).
+        namespace: gateway-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          # gateway-api-crds가 막 만든 CRD 직후의 첫 sync에서 dry-run이 실패하는 것을 피한다
+          # (Karpenter NodePool과 같은 이유).
+          - SkipDryRunOnMissingResource=true
+          - ServerSideApply=true

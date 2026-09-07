@@ -1,0 +1,31 @@
+{{- /* +argocd:skip-file-rendering — root-app 스캔 제외. 렌더 출력에는 남지 않는다 */ -}}
+# ⚠️ 이 리소스가 apply되는 순간 실제 ALB가 AWS에 생성된다(HTTPRoute 존재 여부와 무관 —
+#    AWS 공식 문서: "An AWS Application Load Balancer (ALB) is provisioned ... At this stage,
+#    the ALB is active but does not yet have any configured listeners."). GatewayClass만
+#    만들었을 때와 달리 여기서부터 실제 과금 자원이 생긴다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shared-gateway
+  namespace: gateway-system
+spec:
+  gatewayClassName: alb
+  infrastructure:
+    parametersRef:
+      group: gateway.k8s.aws
+      kind: LoadBalancerConfiguration
+      name: shared-gateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          # HTTPRoute의 Gateway 부착 자체는 ReferenceGrant가 아니라 이 필드가 통제한다
+          # (Gateway API 공식 문서 — allowedRoutes.namespaces가 Route→Gateway attach 담당,
+          # ReferenceGrant는 backendRefs·certificateRefs 같은 다른 cross-namespace 참조 전용).
+          # All 대신 Selector로 좁힌다 — 이 라벨을 단 네임스페이스만 이 Gateway에 붙을 수 있다.
+          from: Selector
+          selector:
+            matchLabels:
+              shared-gateway/access: "true"

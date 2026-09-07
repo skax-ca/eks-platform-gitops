@@ -141,7 +141,7 @@ diff <(grep -v '^#V#' bootstrap/argocd-seed.sh) <eks-reference-infra>/scripts/ar
 **자기 점검**(의도 밖 파일이 마커를 물고 있지 않은지):
 ```bash
 grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --include='*.json' . \
-  | grep -v -e 'addons/karpenter/nodepool/' -e 'addons/kyverno/custom-policies/'
+  | grep -v -e 'addons/karpenter/nodepool/' -e 'addons/kyverno/custom-policies/' -e 'addons/gateway/shared-gateway/'
 ```
 출력이 있으면 해당 파일이 조용히 스캔에서 빠지고 있다는 뜻이다. 새 로컬 helm 차트 디렉토리를 추가하면
 이 `-e` 목록에도 경로를 더한다 — 안 그러면 이 명령 자체가 정상 마커를 "문제"로 오탐한다.
@@ -212,7 +212,7 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 `aws-load-balancer-controller`가 반증 사례다(Terraform 기본값은 `false`인데도 baseline). 가르는
 축은 **워크로드 아키텍처와 무관하게 플랫폼이 보편적으로 요구하는가**다.
 
-- **baseline**(ALBC·Karpenter·Kyverno·Gateway API 표준 CRD): 전 클러스터에 무조건 배포.
+- **baseline**(ALBC·Karpenter·Kyverno·Gateway API): 전 클러스터에 무조건 배포.
 - **catalog**(KEDA·cluster-autoscaler): 특정 아키텍처를 선택한 클러스터만 `addon-<name>: enabled`
   라벨로 구독.
 
@@ -224,6 +224,7 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 | `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | baseline |
 | `kyverno` + `kyverno-policies` | `kyverno.github.io/kyverno` | 3.8.2 | `kyverno` | baseline, `CreateNamespace=true` |
 | Gateway API 표준 CRD | git repo(디렉토리) `kubernetes-sigs/gateway-api` | v1.6.2 | `kube-system`(형식상 값) | baseline. AWS 전용 Gateway CRD는 별도 addon 없이 `aws-load-balancer-controller` chart의 `crds/` 폴더가 이미 설치한다 |
+| `gateway`(GatewayClass·LoadBalancerConfiguration·Gateway) | 로컬 차트(`addons/gateway/shared-gateway/`) | — | `gateway-system` | baseline, `CreateNamespace=true`. HTTPRoute·백엔드는 앱팀 저장소 소관(범위 밖) |
 | `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | opt-in 카탈로그(cluster Secret 라벨 `addon-keda: enabled`) |
 | `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0 | `kube-system` | opt-in 카탈로그(cluster Secret 라벨 `addon-cluster-autoscaler: enabled`) — dev 구독 중(taint 분리 실측 검증 완료) |
 

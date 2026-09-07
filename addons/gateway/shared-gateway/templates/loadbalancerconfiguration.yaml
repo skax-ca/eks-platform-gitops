@@ -1,0 +1,19 @@
+{{- /* +argocd:skip-file-rendering — root-app 스캔 제외. 렌더 출력에는 남지 않는다 */ -}}
+{{- $environment := required "environment 가 비어 있다 — cluster Secret 의 environment 라벨에서 온다" .Values.environment -}}
+# LoadBalancerConfiguration은 Gateway와 같은 네임스페이스에 있어야 한다(AWS 공식 문서 —
+# Gateway.spec.infrastructure.parametersRef가 namespace를 받지 않고 같은 ns로 고정 해석한다).
+apiVersion: gateway.k8s.aws/v1beta1
+kind: LoadBalancerConfiguration
+metadata:
+  name: shared-gateway
+  namespace: gateway-system
+spec:
+  scheme: {{ .Values.scheme }}
+  # 네이밍 카탈로그(iac-module-library docs/naming/abbreviations/aws.md):
+  # alb-<workload>-<env>-<region>-<용도>-<순번>. workload=demo·region=an2는 이 배포 전체가
+  # 고정하는 값이라 라벨로 안 받고 다른 addon(aws-load-balancer-controller.yaml의
+  # region: ap-northeast-2)과 같은 방식으로 여기 그대로 쓴다.
+  loadBalancerName: alb-demo-{{ $environment }}-an2-shared-01
+  tags:
+    workload: demo
+    env: {{ $environment | quote }}

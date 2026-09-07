@@ -134,6 +134,10 @@ spec:
     #    Application이 "is not permitted in project" InvalidSpecError로 막힌 뒤에야 드러났다.
     - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicy }
     - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding }
+    # ── Gateway API 실사용 계층 (addons/baseline/gateway.yaml) ──
+    # GatewayClass는 cluster-scoped다(Gateway·LoadBalancerConfiguration은 namespace-scoped라
+    #    아래 namespaceResourceWhitelist가 이미 커버한다 — 여기 추가할 것이 없다).
+    - { group: gateway.networking.k8s.io, kind: GatewayClass }
 
   # namespace 스코프는 전면 허용 — 플랫폼 계층은 관리자 tier 다.
   namespaceResourceWhitelist:

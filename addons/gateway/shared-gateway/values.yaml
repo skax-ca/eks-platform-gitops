@@ -1,0 +1,14 @@
+# +argocd:skip-file-rendering
+#   ⚠️ 이 마커는 root-app(directory 소스)이 이 파일을 매니페스트로 읽지 않게 한다.
+#      root-app 의 exclude 로 하지 않는 이유는 README의 "root App 스캔에서 파일을 빼는 방법" 절 참조.
+# ⚠️ 기본값이 없다. ApplicationSet 이 cluster generator 에서 주입한다
+#    (addons/baseline/gateway.yaml). 비어 있으면 템플릿이 required 로 실패한다 — 조용히
+#    틀린 값이 들어가는 것보다 낫다. clusterName은 여기서 받지 않는다 — 이 3개 매니페스트
+#    (GatewayClass·LoadBalancerConfiguration·Gateway) 중 실제로 참조하는 곳이 없다.
+environment: ""
+
+# 내부 전용 — live/hub/networking main.tf 의 elb-uniq(internal-elb 태그, isolated 서브넷)로
+# 자동 탐색된다. 이 클러스터 API 엔드포인트·workbench 접근이 전부 private인 것과 같은 기조다.
+# 외부 노출이 필요해지면 이 값을 internet-facing 으로 바꾼다 — 그러면 pub-uniq(elb 태그)
+# 서브넷으로 자동 탐색이 넘어간다(서브넷 ID를 직접 지정하지 않는다).
+scheme: internal

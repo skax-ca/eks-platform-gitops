@@ -20,9 +20,9 @@
 #
 # ⚠️ 이 CRD가 있어도 아무 AWS 리소스도 생기지 않는다 — Gateway API 타입을 apiserver에
 #    등록할 뿐이다. 실제 ALB를 만드는 것은 `Gateway` 리소스이고, 그 트리거가 되는
-#    `GatewayClass`(gateway.k8s.aws/alb)는 **의도적으로 아직 만들지 않는다** — 근거는
-#    aws-load-balancer-controller.yaml의 `createIngressClassResource: false`와 같다
-#    (AppProject clusterResourceWhitelist를 최소로 유지, 첫 소비자가 생길 때 그때 연다).
+#    `GatewayClass`(gateway.k8s.aws/alb)는 별도 baseline addon `gateway.yaml`이 만든다 —
+#    레퍼런스 아키텍처로서 GatewayClass·Gateway까지 실사용 계층을 보여주기로 했다(HTTPRoute·
+#    백엔드는 여전히 계층 3, 이 저장소 범위 밖).
 #
 # 소스가 helm repo가 아니라 **git repo(디렉토리)**인 이유: upstream(kubernetes-sigs/gateway-api)이
 #    이 CRD 세트를 helm chart로 배포하지 않는다(GitHub Release 첨부 YAML만 제공) — 그 YAML이
