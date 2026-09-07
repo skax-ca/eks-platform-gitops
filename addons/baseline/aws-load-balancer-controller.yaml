@@ -22,6 +22,18 @@
 #         ⇒ ns 를 바꾸면 컨트롤러가 AWS 자격증명을 **못 받는다.**
 #
 # 🔴 IAM 자체는 Terraform 전제다. 이 매니페스트는 **SA 이름만** 맞춘다.
+#
+# Gateway API GA 지원 관련 — 이 파일 자체는 변경 없음. chart 3.5.0(=appVersion v3.5.0)이
+#    GA 최소 요구(v2.13.0)를 이미 넘고, `controllerConfig.featureGates`(values.yaml 실측 확인)는
+#    기본값이 빈 맵이라 컨트롤러가 Gateway API CRD 존재 여부를 자동 감지한다(공식 가이드: "LBC will
+#    attempt to detect Gateway CRDs") — 명시적으로 켤 필요가 없다.
+#    🔑 **AWS 전용 Gateway CRD(TargetGroupConfiguration 등)는 이미 이 chart의 `crds/` 폴더에
+#    들어있어 추가 조치가 필요 없다** — ArgoCD는 `skipCrds`를 켜지 않는 한 기본적으로
+#    `helm template --include-crds`로 렌더하므로 이 Application이 이미 설치한다(로컬
+#    `helm template --include-crds` 렌더로 실측 확인). 부족한 것은 upstream이
+#    소유한 **표준** Gateway API CRD(gateway.networking.k8s.io 그룹)뿐이고, 그건 별도 baseline
+#    addon `gateway-api-crds.yaml`이 담당한다. `GatewayClass`는 위 `createIngressClassResource:
+#    false`와 같은 이유로 아직 만들지 않는다(첫 소비자가 생기면 그때).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:

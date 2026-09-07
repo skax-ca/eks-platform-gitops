@@ -49,6 +49,16 @@ spec:
     # ②opt-in 카탈로그. 로컬 HTTP 200 확인(egress canary 는 옵트인 전 별도 실행 필요 —
     #    addons/catalog/cluster-autoscaler.yaml 헤더 참조).
     - https://kubernetes.github.io/autoscaler
+    # ── Gateway API 표준 CRD ──
+    # ⚠️ 다른 항목과 달리 helm repo가 아니라 git repo(디렉토리 소스) — repoURL은 호스트가 아니라
+    #    저장소 전체를 가리킨다. egress canary는 아직 실행 전이라 실제 sync에서 처음 검증된다.
+    #    근거는 addons/baseline/gateway-api-crds.yaml 헤더 참조.
+    #    ⛔ AWS 전용 Gateway CRD(TargetGroupConfiguration 등)는 여기 별도로 추가하지 않는다 —
+    #    aws-load-balancer-controller 차트 자신의 crds/ 폴더에 이미 들어있고 ArgoCD가 기본값
+    #    (skipCrds 미설정 = helm template --include-crds)으로 이미 설치한다(helm template
+    #    --include-crds 로컬 렌더 실측 확인) — 별도 Application을 만들면 같은 리소스를 두
+    #    Application이 동시에 소유하려는 충돌이 난다.
+    - https://github.com/kubernetes-sigs/gateway-api.git
 
   # 등록된 클러스터만 허용. 새 클러스터 등록 시 여기에도 추가한다.
   # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
