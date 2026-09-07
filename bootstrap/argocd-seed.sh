@@ -176,7 +176,7 @@ ok "매니페스트 3종 + values 존재"
 # 클러스터 도달성 — private endpoint 라 workbench 밖에서는 여기서 막힌다
 if (( ! DRY_RUN )); then
   kubectl cluster-info >/dev/null 2>&1 \
-    || die "클러스터에 닿지 않는다. workbench 에서 실행 중인지, kubeconfig 가 맞는지 확인하라(40)"
+    || die "클러스터에 닿지 않는다. workbench 에서 실행 중인지, kubeconfig 가 맞는지 확인하라"
   ok "클러스터 도달 · context=$(kubectl config current-context)"
 fi
 
