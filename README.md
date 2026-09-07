@@ -245,3 +245,10 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
   `compare-options: ServerSideDiff=true`도 쓴다 — CRD·ClusterPolicy의 일부 필드가 apiserver
   기본값으로 채워져 영구 `OutOfSync`가 되는 것을 막는다. `IncludeMutationWebhook=true`는 켜지 않는다
   — 웹훅 변형까지 diff에 들어와 새 drift를 만든다.
+- **Gateway API를 이미 떠 있는 클러스터에 추가할 때**: ALBC는 Gateway API CRD 존재 여부를 파드
+  시작 시점에만 감지하고 캐싱한다 — `gateway-api-crds.yaml`을 ALBC가 이미 오래 떠 있는 클러스터에
+  나중에 추가하면, ALBC 로그에 `Disabling ALBGatewayAPI: missing required CRDs`가 남아있는 채로
+  CRD가 생겨도 재감지하지 않는다(GatewayClass가 `Accepted: Unknown`인 채로 조용히 멈춘다 — 에러가
+  아니다). `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`로
+  재시작하면 즉시 감지·활성화된다. 신규 클러스터를 처음부터 seed하는 경우(hub·dev 최초 구축)는
+  ALBC가 CRD 설치 후 처음 뜨므로 이 문제 자체가 없다.
