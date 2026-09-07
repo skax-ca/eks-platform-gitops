@@ -91,18 +91,18 @@ addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPo
 
 ## `bootstrap/argocd-seed.sh` — vendoring 규약
 
-**SSOT는 이 저장소가 아니라 [`skax-ca/iac-module-library`의 `scripts/argocd-seed.sh`](https://github.com/skax-ca/iac-module-library/blob/main/scripts/argocd-seed.sh)다.**
+**SSOT는 이 저장소가 아니라 [`skax-ca/eks-reference-infra`의 `scripts/argocd-seed.sh`](https://github.com/skax-ca/eks-reference-infra/blob/main/scripts/argocd-seed.sh)다.**
 
-⛔ **이 사본을 편집하지 않는다.** 고칠 일이 생기면 모듈 repo를 고치고 여기로 다시 복사한다.
+⛔ **이 사본을 편집하지 않는다.** 고칠 일이 생기면 SSOT 저장소를 고치고 여기로 다시 복사한다.
 
 **사본이 필요한 이유**
 - workbench는 SSM 전용이라 `scp`가 없다.
-- 이 저장소를 여는 GitHub App의 설치 범위는 이 저장소 하나뿐이다 — 모듈 저장소까지 범위에 넣으면 ArgoCD가 모듈 소스까지 읽게 된다.
+- 이 저장소를 여는 GitHub App의 설치 범위는 이 저장소 하나뿐이다 — SSOT 저장소까지 범위에 넣으면 ArgoCD가 배포 코드까지 읽게 된다.
 - 사본이 여기 있으면 클론 한 번으로 매니페스트와 스크립트가 함께 온다.
 
-**드리프트 검사**(모듈 repo 체크아웃에서 한 줄):
+**드리프트 검사**(SSOT 저장소 체크아웃에서 한 줄):
 ```bash
-diff <(grep -v '^#V#' bootstrap/argocd-seed.sh) <module-repo>/scripts/argocd-seed.sh
+diff <(grep -v '^#V#' bootstrap/argocd-seed.sh) <eks-reference-infra>/scripts/argocd-seed.sh
 ```
 사본 머리의 vendoring 배너는 모든 줄이 `#V#`로 시작한다 — 그 줄을 뺀 나머지는 SSOT와 바이트 단위로
 같아야 한다.
@@ -151,7 +151,7 @@ grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --inc
 - 어떤 디렉토리를 전담하는 Application이 있어도, `Chart.yaml`이 없어 Directory 타입으로 잡히면
   **그 Application도 자기 담당 파일을 스스로 걸러버린다.**
 - 증상: 적용 리소스 0개인 채로 `Synced`/`Healthy`로 보이는 조용한 실패라 알아채기 어렵다
-  (`addons/kyverno/custom-policies/`에서 실제 발생, 2026-08-18).
+  (`addons/kyverno/custom-policies/`에서 실제 발생).
 - 대응: 전담 Application이 있는 디렉토리는 클러스터별 값이 갈리지 않아도 `Chart.yaml`을 둬서 Helm
   타입으로 인식되게 한다 — 마커는 텍스트 스캔이라 Helm 렌더링 엔진은 그냥 주석으로 무시한다.
 
@@ -194,7 +194,7 @@ grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --inc
 APF 같은 기술적 강제도 없다.
 
 - 순서: Terraform 쪽 Pod Identity association을 `kube-system/cluster-autoscaler`로 **먼저** 고정
-  (관례로 선택, `iac-module-library` `docs/02-choose-your-path.md` 참조) → 이 매니페스트가 거기 맞춤.
+  (관례로 선택, `iac-module-library` `docs/architectures/eks-gitops-hub-spoke/choose-your-path.md` 참조) → 이 매니페스트가 거기 맞춤.
 - 즉 위 근거 3(집행 장치)과 인과가 반대다 — association이 원인이 아니라 결과다.
 - 그래서 근거 3과 같은 층으로 세지 않고 정직하게 **약한 예외**로 남겨 둔다. 새 예외를 추가할 때 이
   항목을 전례로 들지 않는다.
@@ -212,7 +212,7 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 `aws-load-balancer-controller`가 반증 사례다(Terraform 기본값은 `false`인데도 baseline). 가르는
 축은 **워크로드 아키텍처와 무관하게 플랫폼이 보편적으로 요구하는가**다.
 
-- **baseline**(ALBC·Karpenter·Kyverno): 전 클러스터에 무조건 배포.
+- **baseline**(ALBC·Karpenter·Kyverno·Gateway API 표준 CRD): 전 클러스터에 무조건 배포.
 - **catalog**(KEDA·cluster-autoscaler): 특정 아키텍처를 선택한 클러스터만 `addon-<name>: enabled`
   라벨로 구독.
 
@@ -223,8 +223,9 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 | `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.0 | `kube-system` | baseline |
 | `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | baseline |
 | `kyverno` + `kyverno-policies` | `kyverno.github.io/kyverno` | 3.8.2 | `kyverno` | baseline, `CreateNamespace=true` |
+| Gateway API 표준 CRD | git repo(디렉토리) `kubernetes-sigs/gateway-api` | v1.6.2 | `kube-system`(형식상 값) | baseline. AWS 전용 Gateway CRD는 별도 addon 없이 `aws-load-balancer-controller` chart의 `crds/` 폴더가 이미 설치한다 |
 | `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | opt-in 카탈로그(cluster Secret 라벨 `addon-keda: enabled`) |
-| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0 | `kube-system` | opt-in 카탈로그(cluster Secret 라벨 `addon-cluster-autoscaler: enabled`) — dev 구독 중(2026-08-14, taint 분리 실측 검증 완료) |
+| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0 | `kube-system` | opt-in 카탈로그(cluster Secret 라벨 `addon-cluster-autoscaler: enabled`) — dev 구독 중(taint 분리 실측 검증 완료) |
 
 ### 운영 노트
 

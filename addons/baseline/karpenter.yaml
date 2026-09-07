@@ -60,7 +60,7 @@ spec:
       name: '{{name}}-karpenter'
       # 이 finalizer가 없으면 Application CR을 지워도(cluster generator가 더 이상
       # 발견 못 하는 경우 포함) 실제로 만든 리소스(Deployment 등)는 클러스터에 orphan으로
-      # 남는다 — spoke teardown 리허설(2026-08-21)에서 실측 발견.
+      # 남는다 — spoke teardown 리허설에서 실측 발견.
       finalizers:
         - resources-finalizer.argocd.argoproj.io
       annotations:
@@ -82,7 +82,7 @@ spec:
         helm:
           # Application 이름({{name}}-karpenter)과 release 이름을 분리한다 — 근거는
           # aws-load-balancer-controller.yaml과 같다.
-          # 계약: iac-module-library docs/02-choose-your-path.md
+          # 계약: iac-module-library docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
           releaseName: karpenter
           parameters:
             # 이 값이 없으면 helm template 이 실패한다:
@@ -97,7 +97,7 @@ spec:
               value: 'Karpenter-{{name}}'
           values: |
             # system 관리형 노드그룹의 workload-class=system NoSchedule taint를 넘는다.
-            #   ⚠️ hub 실제 seed(2026-08-19)에서 발견 — **Karpenter 자신이 부트스트랩 문제다**:
+            #   ⚠️ hub 실제 seed에서 발견 — **Karpenter 자신이 부트스트랩 문제다**:
             #      Karpenter 가 없으면 non-system 노드가 생기지 않고, 그 노드가 없으면 이
             #      2노드(system)가 유일한 스케줄 대상이라 Karpenter 도 여기서 시작해야 한다.
             #      차트 실측(helm show values oci://public.ecr.aws/karpenter/karpenter 1.14.0)으로
@@ -158,8 +158,8 @@ spec:
         #    ⛔ 그래서 이 경로의 파일들은 root-app 스캔에서 빠진다(차트를 매니페스트로 오인하면
         #       sync 가 깨진다) — 어떻게 빠지는지는 README의 "root App 스캔에서 파일을 빼는 방법" 절 참조.
         #       ⚠️ 그 마커 문자열을 이 주석에 그대로 적지 않는다 — 판정이 파일 전체 문자열
-        #       포함 검사라 적으면 **이 파일 자신**이 스캔에서 빠진다(2026-08-18 실제 발생 확인,
-        #       a3869b2 커밋이 이 문장을 쓰면서 바로 이 사고를 냈다).
+        #       포함 검사라 적으면 **이 파일 자신**이 스캔에서 빠진다(실제 발생 확인 — 이 문장을
+        #       설명하는 주석 자체가 그 문자열을 포함해 이 사고를 낸 전례가 있다).
         repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/karpenter/nodepool

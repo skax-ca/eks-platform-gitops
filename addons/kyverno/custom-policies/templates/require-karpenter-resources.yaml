@@ -7,11 +7,11 @@
 #    따로 둔다.
 #
 # 🔴 **클러스터마다 값이 갈리지 않는데도 helm 차트로 만들었다 — Karpenter NodePool과 이유가
-#    다르다.** 처음엔 plain 매니페스트(디렉토리 소스)로 만들었다가 사고를 냈다: 마커는
+#    다르다.** plain 매니페스트(디렉토리 소스)로 두면 마커가 자기 자신에게도 적용된다: 마커는
 #    "root-app만 빼라"가 아니라 "Directory 타입으로 이 파일을 읽는 모든 Application에서
 #    빼라"는 뜻이라, kyverno-custom-policies Application 자신도 Directory 타입으로
-#    잡히면서 자기 담당 파일을 스스로 걸러버렸다(적용 리소스 0개인 채로 Synced/Healthy로
-#    보이는 조용한 실패, 2026-08-18 실제 발견). Chart.yaml을 두면 이 Application이
+#    잡히면 자기 담당 파일을 스스로 걸러버린다(적용 리소스 0개인 채로 Synced/Healthy로
+#    보이는 조용한 실패 — 실제 발생 확인). Chart.yaml을 두면 이 Application이
 #    **Helm 타입**으로 인식돼 marker 텍스트를 그냥 주석으로 무시하고 정상 렌더링하고,
 #    root-app의 최상위 Directory 스캔만 여전히 마커로 걸러진다 — Karpenter NodePool이
 #    쓰는 것과 같은 트릭이지만 여기서는 "값 주입"이 아니라 "타입 회피"가 목적이다.
@@ -35,7 +35,7 @@ metadata:
       정책(require-requests-limits, kyverno.io/policies/best-practices)과 AWS EKS
       Best Practices Guide가 공통으로 권고하는 방향이다.
 spec:
-  # ⚠️ Enforce다 — Audit으로 먼저 관찰하지 않고 바로 차단한다(2026-08-18 결정).
+  # ⚠️ Enforce다 — Audit으로 먼저 관찰하지 않고 바로 차단한다.
   #    failurePolicy는 값을 적지 않는다 — ClusterPolicy 기본값이 Fail이고,
   #    Enforce와 Fail이 짝이 맞는 조합이다(addons/baseline/kyverno.yaml의
   #    kyverno-policies가 Audit+Ignore로 짝을 맞춘 것과 반대 방향으로 같은 원칙).
@@ -50,8 +50,8 @@ spec:
                 - Pod
       exclude:
         any:
-          # ArgoCD 자기 자신은 제외한다. 실측(2026-08-18, helm show values argo/argo-cd
-          # --version 10.3.0): 모든 컴포넌트가 resources: {} (기본값 미설정)이고
+          # ArgoCD 자기 자신은 제외한다. 실측(helm show values argo/argo-cd --version
+          # 10.3.0): 모든 컴포넌트가 resources: {} (기본값 미설정)이고
           # bootstrap/argocd-values.yaml도 그 값을 채우지 않았다 — 지금 켜면 ArgoCD
           # 자신의 재배포가 이 정책에 막힌다(Kyverno 장애 → ArgoCD 막힘 → 고칠 수단
           # 상실과 같은 계열의 순환 의존 위험).

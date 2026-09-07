@@ -1,7 +1,8 @@
 # Cluster Autoscaler — ②opt-in 카탈로그 addon (managed_node_groups 오토스케일링)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT — `07-runbooks.md`의
-#       「Karpenter + Cluster Autoscaler 동시 운영 — taint 전략」절)
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT). taint 병행 전략 자체는
+#       skax-ca/eks-reference-infra의 `docs/runbooks.md` 「Karpenter + Cluster Autoscaler
+#       동시 운영: taint 전략」절이 갖는다(운영 절차 SSOT는 그 repo다).
 #
 # **KEDA 와 같은 카탈로그 패턴** — matchLabels {addon-cluster-autoscaler: enabled} 인 클러스터에만
 #    팬아웃한다. Karpenter(baseline, 전 클러스터)와 달리 **선택**이다 — "app 워크로드는 전부
@@ -17,7 +18,7 @@
 #      managed node group 생성 시 자동으로 ASG에 붙인다** — 이 매니페스트도 Terraform 도
 #      만들 필요가 없다(실측: `terraform-aws-modules/terraform-aws-eks#1886`).
 #
-# ✅ **dev 클러스터는 이 addon 을 구독한다**(cluster Secret 라벨, 2026-08-14) —
+# ✅ **dev 클러스터는 이 addon 을 구독한다**(cluster Secret 라벨) —
 #    `managed_node_groups.system`에 `workload-class=system` taint 가 `eks-reference-infra`
 #    PR #32·#33 으로 이미 반영·실측 검증됐다. taint 분리 없이 CA 를 켜면 CA 가 `system`
 #    노드그룹 전체를 auto-discover 해 Karpenter 와 같은 pending pod 를 두고 경쟁할 수 있었는데
@@ -30,7 +31,8 @@
 #
 #    **정직한 근거**: Terraform 쪽 Pod Identity association 이 이미 `kube-system/
 #    cluster-autoscaler` 로 고정되어 있다(`enable_cluster_autoscaler` 설계 시 사용자가 관례로
-#    선택 — `iac-module-library` `docs/02-choose-your-path.md` 참조, 그 문서도 "공식 근거
+#    선택 — `iac-module-library`
+#    `docs/architectures/eks-gitops-hub-spoke/choose-your-path.md` 참조, 그 문서도 "공식 근거
 #    없음"을 그대로 적어 뒀다). ALBC 의 예외(공식 문서 → association)와 인과가 반대다 —
 #    association 을 먼저 kube-system 으로 만든 뒤 이 매니페스트가 거기 맞추는 것이라, 이 이유를
 #    "근거 3"(집행 장치)과 같은 층으로 세지 않는다. **지금 바꾸려면 두 저장소(Terraform
@@ -46,7 +48,7 @@
 #    뿐이다(CRD·APIService 없음). 둘 다 `projects/platform.yaml`의 ALBC 항목과 겹친다 ⇒
 #    clusterResourceWhitelist 에 **추가할 것이 없다**(Karpenter 와 같은 결론).
 #
-# ✅ **egress canary 확인됨**(2026-08-14, 사용자 실측) — repo-server 가 `kubernetes.github.io`에
+# ✅ **egress canary 확인됨**(사용자 실측) — repo-server 가 `kubernetes.github.io`에
 #    여러 차례 정상 접근 확인됨. 옵트인 전제조건 충족.
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -65,7 +67,7 @@ spec:
     metadata:
       name: '{{name}}-cluster-autoscaler'
       # 이 finalizer가 없으면 Application CR을 지워도 실제 리소스는 클러스터에
-      # orphan으로 남는다 — spoke teardown 리허설(2026-08-21)에서 실측 발견
+      # orphan으로 남는다 — spoke teardown 리허설에서 실측 발견
       # (addons/baseline/karpenter.yaml 헤더 참조).
       finalizers:
         - resources-finalizer.argocd.argoproj.io
@@ -78,7 +80,7 @@ spec:
         helm:
           # Application 이름({{name}}-cluster-autoscaler)과 release 이름을 분리한다 —
           # 이 addon이 DNS-1123 63자 제한에 실제로 걸려 이름이 잘렸던 사례가 이 결정의 근거다.
-          # 계약: iac-module-library docs/02-choose-your-path.md
+          # 계약: iac-module-library docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
           releaseName: cluster-autoscaler
           parameters:
             # autoDiscovery.tags 기본값이 이미
@@ -113,8 +115,8 @@ spec:
                           operator: DoesNotExist
 
             # system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations) —
-            # 모듈 repo `docs/07-runbooks.md`의 「Karpenter + Cluster Autoscaler 동시 운영 —
-            # taint 전략」절과 같은 형태(coredns·metrics-server 와 동일 패턴). 위 negative
+            # eks-reference-infra `docs/runbooks.md`의 「Karpenter + Cluster Autoscaler 동시
+            # 운영: taint 전략」절과 같은 형태(coredns·metrics-server 와 동일 패턴). 위 negative
             # affinity 는 "Karpenter 노드는 안 됨"만 막고 "system 노드로 가라"는 강제하지
             # 않으므로 nodeSelector 가 따로 필요하다. 차트 기본값은 둘 다 비어 있다(실측:
             # `helm show values`).

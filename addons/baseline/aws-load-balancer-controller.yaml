@@ -56,7 +56,7 @@ spec:
     metadata:
       name: '{{name}}-aws-lbc'
       # 이 finalizer가 없으면 Application CR을 지워도 실제 리소스는 클러스터에
-      # orphan으로 남는다 — spoke teardown 리허설(2026-08-21)에서 실측 발견
+      # orphan으로 남는다 — spoke teardown 리허설에서 실측 발견
       # (addons/baseline/karpenter.yaml 헤더 참조).
       finalizers:
         - resources-finalizer.argocd.argoproj.io
@@ -73,7 +73,7 @@ spec:
         helm:
           # Application 이름({{name}}-aws-lbc)과 release 이름을 분리한다 — release 이름이
           # 없으면 그대로 리소스 이름에 전파돼 63자 제한에 걸릴 수 있다.
-          # 계약: iac-module-library docs/02-choose-your-path.md
+          # 계약: iac-module-library docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
           releaseName: aws-lbc
           parameters:
             # ALBC 필수 — 실제 EKS 클러스터명이어야 한다.
@@ -99,7 +99,7 @@ spec:
               value: '{{metadata.labels.vpcName}}'
           values: |
             # system 관리형 노드그룹의 workload-class=system NoSchedule taint를 넘는다.
-            #   ⚠️ hub 실제 seed(2026-08-19)에서 발견 — Karpenter 가 아직 없는 부트스트랩
+            #   ⚠️ hub 실제 seed에서 발견 — Karpenter 가 아직 없는 부트스트랩
             #      시점에는 이 2노드가 유일한 스케줄 대상이다. 차트 실측(helm show values
             #      eks-charts/aws-load-balancer-controller 3.5.0)으로 top-level tolerations
             #      키 확인(argo-cd 의 global.tolerations 와 달리 여기는 이 이름 그대로다).
