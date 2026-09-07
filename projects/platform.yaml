@@ -60,12 +60,32 @@ spec:
     #    Application이 동시에 소유하려는 충돌이 난다.
     - https://github.com/kubernetes-sigs/gateway-api.git
 
-  # 등록된 클러스터만 허용. 새 클러스터 등록 시 여기에도 추가한다.
+  # 등록된 클러스터만 허용 — hub(in-cluster) 는 고정 URL 하나, spoke(cross-account EKS) 는
+  # region 단위 glob 하나로 연다(아래 두 번째 항목). **새 클러스터를 등록해도 이 목록을
+  # 편집할 필요가 없다** — README "확장 규칙(O(1))" 이 실제로 O(1) 이 되는 지점이 여기다.
   # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
   destinations:
     # self-managed ArgoCD 는 자신이 도는 클러스터를 이 URL 로 가리킨다.
     # ⚠️ 관리형 Capability 로 전환하면 EKS 클러스터 ARN 으로 바뀐다.
     - server: https://kubernetes.default.svc
+      namespace: '*'
+    # spoke — cross-account EKS API endpoint. glob 이 필요한 이유: 이 값은 계정마다 다르고
+    #    **같은 클러스터라도 완전 재구축(destroy→apply) 하면 새로 발급된다**(cluster-secret.yaml
+    #    의 server·caData 를 매번 갱신해야 하는 것과 같은 이유, `eks-reference-infra`
+    #    `docs/spoke-lifecycle.md` 「재배포 시 GitOps 재등록」절 참조) — 정확한 값을 여기 박아두면
+    #    spoke 를 재구축할 때마다 이 파일도 같이 고쳐야 하는 함정이 생긴다. region(an2) 은 이
+    #    배포 전체가 고정하는 값이라 glob 도 거기까지만 고정한다.
+    # 🔑 계정·클러스터를 특정하지 않아도 안전한 이유 — destinations 는 유일한 게이트가 아니다.
+    #    실제 접근은 (1) 이 저장소에 cluster-secret.yaml 을 커밋할 git 권한, (2) spoke 의
+    #    `cross-account-trust-role` Role trust policy 로 이미 이중으로 막혀 있다. 여기서
+    #    막는 사고는 "저장소에 실수로 들어온 매니페스트" 지 "누가 인증됐는가" 가 아니다(위
+    #    self-managed 무게 설명과 같은 원칙).
+    # 실측(ArgoCD v3.5.0 소스 `pkg/apis/application/v1alpha1/app_project_types.go`
+    #    `isDestinationMatched` → `globMatch(item.Server, dst.Server, true)`): separators
+    #    인자를 넘기지 않는다 ⇒ `gobwas/glob` 이 `.` 을 구분자로 취급하지 않고 `*` 가 그대로
+    #    삼킨다. 즉 아래 패턴이 `https://<32자리 hex>.gr7.ap-northeast-2.eks.amazonaws.com`
+    #    형태(hub 실측: `aws eks describe-cluster --query cluster.endpoint`) 전체와 매치된다.
+    - server: 'https://*.ap-northeast-2.eks.amazonaws.com'
       namespace: '*'
 
   # 클러스터 스코프 리소스는 **기본 차단**으로 시작해 addon 마다 필요한 kind 만 연다
