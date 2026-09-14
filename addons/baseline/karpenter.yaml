@@ -43,18 +43,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
+  # ⚠️ **이름에 `-prd`를 붙이지 않는다.** uniform에서 staged로 전환하면서 기존 이름을 prd 쪽이
+  #    물려받았다. 이름을 바꾸면 이 ApplicationSet이 삭제된 것으로 처리되고, 그것이 만든
+  #    Application이 ownerReference를 따라 지워지면서 finalizer가 **컨트롤러 실물까지 prune한다.**
+  #    파일 아래 nonprd 블록만 신규다. 비대칭은 전환의 흔적이다.
   name: karpenter
   namespace: argocd
 spec:
   generators:
     - clusters:
         selector:
-          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
-          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
-          # 라벨 자체가 없어 여기 걸리지 않는다.
-          matchExpressions:
-            - key: environment
-              operator: Exists
+          # staged 전파 — prd 티어. 전환 전에는 `environment` Exists(전 클러스터)였다.
+          # hub는 tier=prd라 전환 후에도 계속 매칭되므로 Application과 리소스가 그대로 간다.
+          # 노드를 직접 만드는 컨트롤러라 비운영에서 먼저 확인하고 승격한다.
+          matchLabels:
+            tier: prd
   template:
     metadata:
       name: '{{name}}-karpenter'
@@ -126,7 +129,84 @@ spec:
           - ServerSideApply=true
 ---
 # ────────────────────────────────────────────────────────────────────────────
+# ①-nonprd 컨트롤러 — staged 전파의 nonprd 티어 (전환 시 신규 추가된 블록)
+#
+# 🔑 위 ① prd 블록과 이 블록의 `targetRevision` 차이가 **승격이 어디까지 갔는지**를 저장소에
+#    기록한다. 다르면 진행 중, 같아지면 끝난 것이다.
+#
+# ⚠️ 지금은 대상이 **0개**다(EKS dev 철거 상태). 사고가 아니라 **빈 슬롯**이고, cluster Secret이
+#    tier=nonprd로 등록되는 순간 자동 팬아웃된다. dev 재등록 시 `environment: dev`와
+#    `tier: nonprd`를 **둘 다** 붙인다 — teardown 때 매칭 라벨을 떼어낸 채 삭제했으므로 git
+#    이력의 마지막 파일을 그대로 되살리면 라벨이 없다. `karpenterNodeRole` 라벨도 ②가 읽으므로
+#    함께 붙인다(role 이름에 26자 hash 접미가 붙어 재구축마다 바뀐다).
+#
+# ⛔ **두 블록을 함께 고친다.** helm 값·네임스페이스·APF 근거 주석은 위 ① 블록이 소유하고
+#    여기서는 중복하지 않는다. 한쪽만 고치면 승격했을 때 설정이 조용히 달라진다. 값이 갈려야
+#    하는 것은 `targetRevision` 하나뿐이다.
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: karpenter-nonprd
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            tier: nonprd
+  template:
+    metadata:
+      name: '{{name}}-karpenter'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    spec:
+      project: platform
+      source:
+        repoURL: public.ecr.aws/karpenter
+        chart: karpenter
+        # 승격 대기 중에는 이 값이 prd보다 앞선다. 검증이 끝나면 prd를 같은 값으로 올린다.
+        targetRevision: 1.14.0
+        helm:
+          releaseName: karpenter
+          parameters:
+            - name: settings.clusterName
+              value: '{{name}}'
+            - name: settings.interruptionQueue
+              value: 'Karpenter-{{name}}'
+          values: |
+            tolerations:
+              - key: workload-class
+                operator: Equal
+                value: system
+                effect: NoSchedule
+            serviceAccount:
+              create: true
+              name: karpenter
+            replicas: 2
+      destination:
+        server: '{{server}}'
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - ServerSideApply=true
+---
+# ────────────────────────────────────────────────────────────────────────────
 # ② NodePool / EC2NodeClass — 계층 2(플랫폼 GitOps)가 소유하는 인프라 CR
+#
+# ⛔ **이 블록은 티어로 나누지 않는다.** `targetRevision`이 `main`(이 저장소 자신)이라 두
+#    블록으로 쪼개도 값이 항상 같아 승격이 기록되지 않는다. 블록만 늘고 읽을 정보가 없다.
+#    ⇒ 양 티어가 **같은 CR 차트**를 본다.
+#    ⚠️ 그래서 ①의 승격이 진행 중일 때(nonprd가 새 CRD, prd가 옛 CRD)는 이 차트가 **두 버전
+#       모두에서 유효해야** 한다. 새 버전에서 생긴 필드를 여기 넣으면 prd에서 미지의 필드가
+#       된다. 새 필드가 필요하면 ①의 승격을 끝내고 커밋한다.
+#    근거: iac-module-library docs/architectures/gitops-hub-spoke/gitops.md
+#          「전파 정책: 누가 받고, 어떤 버전을 받나」
 # ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
