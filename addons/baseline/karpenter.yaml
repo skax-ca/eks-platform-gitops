@@ -2,9 +2,17 @@
 #
 # 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
 #
-# ApplicationSet 이 **2개**인 이유는 CRD 순서다. 파일은 하나로 유지한다(O(1)).
-#    ① 컨트롤러 helm  — chart 가 NodePool/NodeClaim/EC2NodeClass CRD 를 동봉한다 (sync-wave 0)
-#    ② CR (NodePool/EC2NodeClass) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
+# ApplicationSet 이 **3개**인 이유는 나누는 축이 **둘**이기 때문이다. 파일은 하나로 유지한다(O(1)).
+#
+#    축 1 — CRD 순서(sync-wave). 컨트롤러가 CRD 를 동봉하므로 그 CRD 를 쓰는 CR 이 뒤에 와야 한다.
+#      ① 컨트롤러 helm  — chart 가 NodePool/NodeClaim/EC2NodeClass CRD 를 동봉한다 (sync-wave 0)
+#      ② CR (NodePool/EC2NodeClass) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
+#
+#    축 2 — tier(staged 전파). **①만 나눈다** ⇒ `karpenter-prd` · `karpenter-nonprd`.
+#      ②는 나누지 않는다. `targetRevision` 이 `main`(이 저장소 자신)이라 두 블록으로 쪼개도 값이
+#      항상 같아 승격이 기록되지 않는다. 버전 핀을 가진 ApplicationSet 만 티어 수만큼 둔다.
+#
+#    ⇒ 두 축을 곱하지 않아 4개가 아니라 3개다. 블록 수는 클러스터 수를 따라가지 않는다.
 #
 # 네임스페이스 = **kube-system** — 이 repo의 네임스페이스 규칙(전용 ns 신설)의 **예외 2개 중
 #    하나**다(다른 하나는 ALBC). 이 repo의 기본 규칙은 "계층 2 addon은 전용 네임스페이스를
@@ -43,19 +51,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  # ⚠️ **이름에 `-prd`를 붙이지 않는다.** uniform에서 staged로 전환하면서 기존 이름을 prd 쪽이
-  #    물려받았다. 이름을 바꾸면 이 ApplicationSet이 삭제된 것으로 처리되고, 그것이 만든
-  #    Application이 ownerReference를 따라 지워지면서 finalizer가 **컨트롤러 실물까지 prune한다.**
-  #    파일 아래 nonprd 블록만 신규다. 비대칭은 전환의 흔적이다.
-  name: karpenter
+  # ⚠️ **이 이름은 돌고 있는 클러스터가 있을 때 바꾸지 않는다.** 바꾸면 이 ApplicationSet이
+  #    삭제된 것으로 처리되고, 그것이 만든 Application이 ownerReference를 따라 지워지면서
+  #    finalizer가 **컨트롤러 실물까지 prune한다**(그 경로는 spoke teardown 리허설에서 실측했다,
+  #    아래 ① template의 finalizer 주석 참조). 이름을 정리할 수 있는 시점은 **전면 철거 이후,
+  #    seed 이전**뿐이다. 삭제를 관측할 ArgoCD가 없어야 안전하다.
+  name: karpenter-prd
   namespace: argocd
 spec:
   generators:
     - clusters:
         selector:
-          # staged 전파 — prd 티어. 전환 전에는 `environment` Exists(전 클러스터)였다.
-          # hub는 tier=prd라 전환 후에도 계속 매칭되므로 Application과 리소스가 그대로 간다.
-          # 노드를 직접 만드는 컨트롤러라 비운영에서 먼저 확인하고 승격한다.
+          # staged 전파 — prd 티어. 노드를 직접 만드는 컨트롤러라 비운영에서 먼저 확인하고
+          # 승격한다. 아래 nonprd 블록과의 `targetRevision` 차이가 승격 지점을 기록한다.
           matchLabels:
             tier: prd
   template:
@@ -129,16 +137,21 @@ spec:
           - ServerSideApply=true
 ---
 # ────────────────────────────────────────────────────────────────────────────
-# ①-nonprd 컨트롤러 — staged 전파의 nonprd 티어 (전환 시 신규 추가된 블록)
+# ①-nonprd 컨트롤러 — staged 전파의 nonprd 티어
 #
-# 🔑 위 ① prd 블록과 이 블록의 `targetRevision` 차이가 **승격이 어디까지 갔는지**를 저장소에
+# 🔑 위 ①-prd 블록과 이 블록의 `targetRevision` 차이가 **승격이 어디까지 갔는지**를 저장소에
 #    기록한다. 다르면 진행 중, 같아지면 끝난 것이다.
 #
-# ⚠️ 지금은 대상이 **0개**다(EKS dev 철거 상태). 사고가 아니라 **빈 슬롯**이고, cluster Secret이
-#    tier=nonprd로 등록되는 순간 자동 팬아웃된다. dev 재등록 시 `environment: dev`와
-#    `tier: nonprd`를 **둘 다** 붙인다 — teardown 때 매칭 라벨을 떼어낸 채 삭제했으므로 git
-#    이력의 마지막 파일을 그대로 되살리면 라벨이 없다. `karpenterNodeRole` 라벨도 ②가 읽으므로
-#    함께 붙인다(role 이름에 26자 hash 접미가 붙어 재구축마다 바뀐다).
+# ⚠️ 그 티어의 클러스터가 아직 없으면 대상이 0개가 된다. 사고가 아니라 **빈 슬롯**이고,
+#    cluster Secret이 tier=nonprd로 등록되는 순간 자동 팬아웃된다. ArgoCD는 대상 0개 팬아웃을
+#    오류로 보고하지 않으므로, 0이 의도인지 사고인지는 등록된 cluster Secret의 `tier` 값을 세어
+#    구분한다(어느 쪽 값도 아닌 클러스터가 있으면 사고다).
+#
+# ⚠️ **클러스터 등록 시 매칭 라벨을 빠뜨리지 않는다.** `environment`와 `tier`를 둘 다 붙이고,
+#    ②가 읽는 `karpenterNodeRole`(role 이름에 26자 hash 접미가 붙어 재구축마다 바뀐다)과 ALBC가
+#    읽는 `vpcName`도 함께 붙인다. teardown은 **매칭 라벨을 먼저 떼어낸 뒤** 삭제하는 절차라,
+#    git 이력의 마지막 cluster-secret을 그대로 되살리면 라벨이 빠진 채 등록된다.
+#    ⇒ 그 상태로는 Application이 **하나도** 생기지 않는다(조용히 실패한다).
 #
 # ⛔ **두 블록을 함께 고친다.** helm 값·네임스페이스·APF 근거 주석은 위 ① 블록이 소유하고
 #    여기서는 중복하지 않는다. 한쪽만 고치면 승격했을 때 설정이 조용히 달라진다. 값이 갈려야
