@@ -1,0 +1,75 @@
+# Karpenter NodePool/EC2NodeClass — ①baseline addon (계층 2가 소유하는 인프라 CR)
+#
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+#
+# **Karpenter 파일 2개 중 ②다** — ① 컨트롤러는 `karpenter.yaml`. 파일이 나뉜 이유는 그 헤더가
+#    갖는다. 이 CR 은 컨트롤러 차트가 동봉한 CRD 가 **선존재해야** 적용되므로 sync-wave 5 다.
+#
+# ⛔ **이 파일은 티어로 나누지 않는다(uniform).** `targetRevision` 이 `main`(이 저장소 자신)이라
+#    두 벌로 쪼개도 값이 항상 같아 승격이 기록되지 않는다. 블록만 늘고 읽을 정보가 없다.
+#    ⇒ 양 티어가 **같은 CR 차트**를 본다.
+#    ⚠️ 그래서 ①의 승격이 진행 중일 때(nonprd 가 새 CRD, prd 가 옛 CRD)는 이 차트가 **두 버전
+#       모두에서 유효해야** 한다. 새 버전에서 생긴 필드를 여기 넣으면 prd 에서 미지의 필드가
+#       된다. 새 필드가 필요하면 ①의 승격을 끝내고 커밋한다.
+#    근거: iac-module-library docs/architectures/gitops-hub-spoke/gitops.md
+#          「전파 정책: 누가 받고, 어떤 버전을 받나」
+#
+# 🔴 Terraform 전제: 노드 IAM role. 그 이름이 **클러스터명에서 파생 불가**해(26자 hash 접미)
+#    cluster Secret 의 `karpenterNodeRole` 라벨로 받는다. 나머지 전제(컨트롤러 IAM role·중단 SQS·
+#    Pod Identity)는 ①이 쓴다.
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: karpenter-nodepool
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
+          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
+          # 라벨 자체가 없어 여기 걸리지 않는다.
+          matchExpressions:
+            - key: environment
+              operator: Exists
+  template:
+    metadata:
+      name: '{{name}}-karpenter-nodepool'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+    spec:
+      project: platform
+      source:
+        # 이 저장소의 로컬 helm 차트다. ⚠️ ApplicationSet 의 fasttemplate 은 **Application spec** 에만
+        #    적용되고 git 경로 안의 파일에는 적용되지 않는다 ⇒ per-cluster 값을 넘기려면 helm 이 필요하다.
+        #    ⛔ 그래서 이 경로의 파일들은 root-app 스캔에서 빠진다(차트를 매니페스트로 오인하면
+        #       sync 가 깨진다) — 어떻게 빠지는지는 README의 "root App 스캔에서 파일을 빼는 방법" 절 참조.
+        #       ⚠️ 그 마커 문자열을 이 주석에 그대로 적지 않는다 — 판정이 파일 전체 문자열
+        #       포함 검사라 적으면 **이 파일 자신**이 스캔에서 빠진다(실제 발생 확인 — 이 문장을
+        #       설명하는 주석 자체가 그 문자열을 포함해 이 사고를 낸 전례가 있다).
+        repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+        targetRevision: main
+        path: addons/karpenter/nodepool
+        helm:
+          parameters:
+            - name: clusterName
+              value: '{{name}}'
+            # 🔑 Karpenter 가 필요로 하는 값 중 **유일하게 클러스터명에서 파생 불가**한 값이다
+            #    (role 이름에 26자 hash 접미가 붙는다). 그래서 라벨이 하나 필요하다.
+            - name: nodeRole
+              value: '{{metadata.labels.karpenterNodeRole}}'
+      destination:
+        server: '{{server}}'
+        # CR 은 cluster-scoped 라 이 ns 는 형식상 값이다.
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
+          - SkipDryRunOnMissingResource=true
+          - ServerSideApply=true

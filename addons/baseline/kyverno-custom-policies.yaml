@@ -1,0 +1,74 @@
+# Kyverno 커스텀 정책 — ①baseline addon (이 저장소가 직접 소유하는 ClusterPolicy)
+#
+# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+#
+# **Kyverno 파일 3개 중 ③이다** — ① 엔진은 `kyverno.yaml`, ② PSS 정책은
+#    `kyverno-policies.yaml`. 파일이 나뉜 이유는 `kyverno.yaml` 헤더가 갖는다.
+#
+# **②와 별도 Application 인 이유는 소유권이다.** ②는 업스트림 차트 하나로 source 가 고정돼
+#    있어 임의의 새 정책을 주입할 수 없다. 그래서 우리가 직접 만든 정책은 형제 Application 으로
+#    따로 둔다(`addons/kyverno/custom-policies/`).
+#    ⚠️ 그 경로가 **로컬 helm 차트**인 이유는 값이 갈려서가 아니다. `Chart.yaml` 이 있어야 이
+#       Application 자신이 Helm 타입으로 인식돼 skip-file-rendering 마커가 "root-app 만 제외"로
+#       동작한다. Chart.yaml 없이 plain 매니페스트로 뒀다가 이 Application 자신도 Directory
+#       타입으로 잡혀 **자기 담당 파일을 걸러버린** 사고가 있었다(Karpenter NodePool 과 같은 이유).
+#
+# **uniform 인 이유**: `targetRevision: main` 이라 승격할 버전이 없다. ①②가 staged 로 나뉘어도
+#    이 파일은 나누지 않는다.
+#    ⚠️ 그래서 **양 티어가 같은 정책을 본다.** ①의 승격이 진행 중일 때(nonprd 가 새 CRD, prd 가
+#       옛 CRD) 이 정책은 **두 엔진 버전 모두에서 유효해야** 한다. 새 버전에서 생긴 필드를 쓰려면
+#       ①②의 승격을 끝내고 커밋한다.
+#
+# ────────────────────────────────────────────────────────────────────────────
+# ③ 커스텀 정책 — Karpenter 자원 요구사항 강제 (uniform)
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kyverno-custom-policies
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
+          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
+          # 라벨 자체가 없어 여기 걸리지 않는다.
+          matchExpressions:
+            - key: environment
+              operator: Exists
+  template:
+    metadata:
+      name: '{{name}}-kyverno-custom-policies'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+        # 🔴 ClusterPolicy CRD도 ②(kyverno-policies)와 같은 병이 있다 — 실측(머지 직후
+        #    Application이 OutOfSync로 고착): 우리가 선언하지 않은
+        #    spec.admission=true·spec.emitWarning=false가 live에 존재했다. 둘 다
+        #    Kyverno CRD openAPI 스키마의 default:를 apiserver가 채운 것이라 위 ②의 헤더
+        #    주석과 같은 원인이다. ServerSideDiff 없이는 selfHeal이 매번 "고치고" 다시
+        #    OutOfSync로 돌아오는 무한 루프가 된다.
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
+    spec:
+      project: platform
+      source:
+        # 이 저장소가 직접 소유하는 정책 — 로컬 helm 차트(addons/kyverno/custom-policies/,
+        # Chart.yaml 존재)라서 이 Application은 Helm 타입으로 렌더링되고, root-app의
+        # 최상위 Directory 스캔만 templates/ 안의 마커로 걸러진다. 값이 갈리지 않는데도
+        # 차트인 이유는 Chart.yaml 헤더 참조.
+        repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+        targetRevision: main
+        path: addons/kyverno/custom-policies
+      destination:
+        server: '{{server}}'
+        namespace: kyverno
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
+          - SkipDryRunOnMissingResource=true
+          - ServerSideApply=true

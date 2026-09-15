@@ -1,18 +1,19 @@
-# Karpenter — ①baseline addon (컨트롤러 helm + NodePool/EC2NodeClass)
+# Karpenter 컨트롤러 — ①baseline addon (노드 오토프로비저너. 차트가 CRD 를 동봉한다)
 #
 # 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
 #
-# ApplicationSet 이 **3개**인 이유는 나누는 축이 **둘**이기 때문이다. 파일은 하나로 유지한다(O(1)).
+# ─────────────────────────────────────────────────────────────────────────────
+# **Karpenter 는 파일 2개다.** 컴포넌트로 나누고 **티어는 한 파일에 붙여 둔다** — 승격할 때
+#    두 `targetRevision` 을 나란히 읽어야 하기 때문이다(그 차이가 승격 지점의 기록이다).
 #
-#    축 1 — CRD 순서(sync-wave). 컨트롤러가 CRD 를 동봉하므로 그 CRD 를 쓰는 CR 이 뒤에 와야 한다.
-#      ① 컨트롤러 helm  — chart 가 NodePool/NodeClaim/EC2NodeClass CRD 를 동봉한다 (sync-wave 0)
-#      ② CR (NodePool/EC2NodeClass) — 그 CRD 가 **선존재해야** 적용 가능하다 (sync-wave 5)
+#    · karpenter.yaml (이 파일)   ① 컨트롤러 helm. NodePool/NodeClaim/EC2NodeClass CRD 동봉
+#                                   (sync-wave 0) staged ⇒ `-prd` · `-nonprd` 두 블록
+#    · karpenter-nodepool.yaml    ② CR(NodePool/EC2NodeClass). 그 CRD 가 **선존재해야** 적용된다
+#                                   (sync-wave 5) uniform ⇒ `main` 핀이라 나눌 버전이 없다
 #
-#    축 2 — tier(staged 전파). **①만 나눈다** ⇒ `karpenter-prd` · `karpenter-nonprd`.
-#      ②는 나누지 않는다. `targetRevision` 이 `main`(이 저장소 자신)이라 두 블록으로 쪼개도 값이
-#      항상 같아 승격이 기록되지 않는다. 버전 핀을 가진 ApplicationSet 만 티어 수만큼 둔다.
-#
-#    ⇒ 두 축을 곱하지 않아 4개가 아니라 3개다. 블록 수는 클러스터 수를 따라가지 않는다.
+#    ⚠️ ②가 나뉘지 않으므로 **양 티어가 같은 CR 차트를 본다.** 이 파일의 승격이 진행 중일 때
+#       그 차트는 두 CRD 버전 모두에서 유효해야 한다(상세는 karpenter-nodepool.yaml 헤더).
+# ─────────────────────────────────────────────────────────────────────────────
 #
 # 네임스페이스 = **kube-system** — 이 repo의 네임스페이스 규칙(전용 ns 신설)의 **예외 2개 중
 #    하나**다(다른 하나는 ALBC). 이 repo의 기본 규칙은 "계층 2 addon은 전용 네임스페이스를
@@ -207,72 +208,4 @@ spec:
           prune: true
           selfHeal: true
         syncOptions:
-          - ServerSideApply=true
----
-# ────────────────────────────────────────────────────────────────────────────
-# ② NodePool / EC2NodeClass — 계층 2(플랫폼 GitOps)가 소유하는 인프라 CR
-#
-# ⛔ **이 블록은 티어로 나누지 않는다.** `targetRevision`이 `main`(이 저장소 자신)이라 두
-#    블록으로 쪼개도 값이 항상 같아 승격이 기록되지 않는다. 블록만 늘고 읽을 정보가 없다.
-#    ⇒ 양 티어가 **같은 CR 차트**를 본다.
-#    ⚠️ 그래서 ①의 승격이 진행 중일 때(nonprd가 새 CRD, prd가 옛 CRD)는 이 차트가 **두 버전
-#       모두에서 유효해야** 한다. 새 버전에서 생긴 필드를 여기 넣으면 prd에서 미지의 필드가
-#       된다. 새 필드가 필요하면 ①의 승격을 끝내고 커밋한다.
-#    근거: iac-module-library docs/architectures/gitops-hub-spoke/gitops.md
-#          「전파 정책: 누가 받고, 어떤 버전을 받나」
-# ────────────────────────────────────────────────────────────────────────────
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: karpenter-nodepool
-  namespace: argocd
-spec:
-  generators:
-    - clusters:
-        selector:
-          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
-          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
-          # 라벨 자체가 없어 여기 걸리지 않는다.
-          matchExpressions:
-            - key: environment
-              operator: Exists
-  template:
-    metadata:
-      name: '{{name}}-karpenter-nodepool'
-      finalizers:
-        - resources-finalizer.argocd.argoproj.io
-      annotations:
-        argocd.argoproj.io/sync-wave: "5"
-    spec:
-      project: platform
-      source:
-        # 이 저장소의 로컬 helm 차트다. ⚠️ ApplicationSet 의 fasttemplate 은 **Application spec** 에만
-        #    적용되고 git 경로 안의 파일에는 적용되지 않는다 ⇒ per-cluster 값을 넘기려면 helm 이 필요하다.
-        #    ⛔ 그래서 이 경로의 파일들은 root-app 스캔에서 빠진다(차트를 매니페스트로 오인하면
-        #       sync 가 깨진다) — 어떻게 빠지는지는 README의 "root App 스캔에서 파일을 빼는 방법" 절 참조.
-        #       ⚠️ 그 마커 문자열을 이 주석에 그대로 적지 않는다 — 판정이 파일 전체 문자열
-        #       포함 검사라 적으면 **이 파일 자신**이 스캔에서 빠진다(실제 발생 확인 — 이 문장을
-        #       설명하는 주석 자체가 그 문자열을 포함해 이 사고를 낸 전례가 있다).
-        repoURL: https://github.com/skax-ca/eks-platform-gitops.git
-        targetRevision: main
-        path: addons/karpenter/nodepool
-        helm:
-          parameters:
-            - name: clusterName
-              value: '{{name}}'
-            # 🔑 Karpenter 가 필요로 하는 값 중 **유일하게 클러스터명에서 파생 불가**한 값이다
-            #    (role 이름에 26자 hash 접미가 붙는다). 그래서 라벨이 하나 필요하다.
-            - name: nodeRole
-              value: '{{metadata.labels.karpenterNodeRole}}'
-      destination:
-        server: '{{server}}'
-        # CR 은 cluster-scoped 라 이 ns 는 형식상 값이다.
-        namespace: kube-system
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
-          - SkipDryRunOnMissingResource=true
           - ServerSideApply=true

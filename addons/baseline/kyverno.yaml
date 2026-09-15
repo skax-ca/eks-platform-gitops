@@ -1,32 +1,27 @@
-# Kyverno — ①baseline addon (정책 엔진 + PSS 정책)
+# Kyverno 엔진 — ①baseline addon (정책 엔진. 차트가 CRD 22개를 동봉한다)
 #
 # 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
 #
 # **①baseline 인 이유**: 정책 엔진은 **가드레일**이고, **옵트인 가드레일은 가드레일이
 #    아니다.** ALBC·Karpenter 와 같은 층에 둔다.
 #
-# ApplicationSet 이 **5개**인 이유는 나누는 축이 **둘**이기 때문이다 — 파일은 하나로 유지한다(O(1)).
+# ─────────────────────────────────────────────────────────────────────────────
+# **Kyverno 는 파일 3개다.** 컴포넌트로 나누고 **티어는 한 파일에 붙여 둔다** — 승격할 때
+#    두 `targetRevision` 을 나란히 읽어야 하기 때문이다(그 차이가 승격 지점의 기록이다).
 #
-#    축 1 — CRD 순서 + 소유권 분리
-#      ① 컨트롤러 helm — 차트가 ClusterPolicy 등 CRD 22개를 동봉한다        (sync-wave 0)
-#      ② PSS 정책(ClusterPolicy 11개, 업스트림 kyverno-policies 차트)         (sync-wave 5)
-#      ③ 커스텀 정책(ClusterPolicy, 이 저장소가 직접 소유) — Karpenter 자원 요구사항 강제 (sync-wave 5)
+#    · kyverno.yaml (이 파일)        ① 엔진 helm. CRD 22개 동봉        (sync-wave 0)
+#                                      staged ⇒ `-prd` · `-nonprd` 두 블록
+#    · kyverno-policies.yaml         ② PSS 정책(업스트림 차트)         (sync-wave 5)
+#                                      staged ⇒ 엔진과 **같은 번호**를 유지
+#    · kyverno-custom-policies.yaml  ③ 우리가 만든 ClusterPolicy       (sync-wave 5)
+#                                      uniform ⇒ `main` 핀이라 나눌 버전이 없다
 #
-#    축 2 — tier(staged 전파). **①②를 나눈다** ⇒ -prd · -nonprd 가 각각 하나씩.
-#      ①은 admission webhook 컨트롤러라 깨지면 그 클러스터의 모든 배포가 막힌다 ⇒ 비운영에서
-#        먼저 확인하고 승격한다.
-#      ②는 정책 **내용**이라 uniform 이 자연스럽지만, 엔진과 **같은 번호로만 릴리스되므로**
-#        엔진을 따라간다(짝을 깨면 업스트림이 내지 않는 조합이 된다).
-#      ③은 `targetRevision: main` 이라 승격할 버전이 없다 ⇒ 나누지 않는다(uniform).
-#
-#    ⇒ 두 축을 곱하지 않아 6개가 아니라 5개다.
-#    ⚠️ ②와 ③은 소유권이 다르다 — ②는 업스트림 차트 하나로 source가 고정돼 있어 임의의
-#       새 정책을 주입할 수 없다. 그래서 우리가 직접 만든 정책은 ③으로 형제 Application을
-#       따로 둔다(addons/kyverno/custom-policies/, Karpenter NodePool과 같은 이유로
-#       로컬 helm 차트다 — 값이 갈려서가 아니라 Chart.yaml이 있어야 이 Application 자신이
-#       Helm 타입으로 인식돼 skip-file-rendering 마커가 "root-app만 제외"로 동작하기
-#       때문이다. Chart.yaml 없이 plain 매니페스트로 뒀다가 이 Application 자신도
-#       Directory 타입으로 잡혀 자기 담당 파일을 걸러버린 사고가 있었다).
+#    ⛔ **①과 ②는 같은 번호로만 릴리스된다 ⇒ 한쪽만 올리지 않는다.** helm index 실측:
+#       3.x stable 에서 kyverno 59개 · kyverno-policies 51개, 공통 51개이고 policies 단독
+#       릴리스는 **0개**다. staged 로 나뉜 지금은 값이 **4개**이고, 승격은 nonprd 둘을 먼저
+#       올려 검증한 뒤 prd 둘을 같은 값으로 올린다.
+#    ⚠️ ③이 형제 Application 인 이유(소유권)는 kyverno-custom-policies.yaml 헤더가 갖는다.
+# ─────────────────────────────────────────────────────────────────────────────
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # 네임스페이스 = **kyverno (전용 ns 신설)** — 이 repo의 네임스페이스 기본 규칙이다.
@@ -201,185 +196,4 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-          - ServerSideApply=true
----
-# ────────────────────────────────────────────────────────────────────────────
-# ② PSS 정책(ClusterPolicy 11개) — 계층 2(플랫폼 GitOps)가 소유하는 정책
-# ────────────────────────────────────────────────────────────────────────────
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  # ⚠️ 돌고 있는 클러스터가 있을 때 이 이름을 바꾸지 않는다(karpenter.yaml 헤더 참조).
-  name: kyverno-policies-prd
-  namespace: argocd
-spec:
-  generators:
-    - clusters:
-        selector:
-          # staged 전파 — prd 티어.
-          # 🔑 정책 **내용**만 보면 uniform 이 맞다(클러스터 간 차이가 곧 통과 기준의 차이다).
-          #    그런데 이 차트는 엔진과 **같은 번호로만 릴리스된다** ⇒ 엔진이 staged 면 이것도
-          #    따라가야 짝이 유지된다. 티어 안에서는 항상 같은 번호이고, 차이는 승격 구간에만 있다.
-          #    ⛔ ③(우리가 만든 정책)은 이 제약이 없어 uniform 으로 남는다.
-          matchLabels:
-            tier: prd
-  template:
-    metadata:
-      name: '{{name}}-kyverno-policies'
-      finalizers:
-        - resources-finalizer.argocd.argoproj.io
-      annotations:
-        argocd.argoproj.io/sync-wave: "5"
-        # 🔴 ClusterPolicy 11개도 `ServerSideDiff` 없이는 영구 `OutOfSync` 다 — ①의 CRD 와
-        #    **같은 원인**이다. 진짜 차이는 **`spec.admission`·`spec.emitWarning`** 이고,
-        #    Kyverno CRD openAPI 스키마의 `default:`를 apiserver 가 채운 것이다(`kyverno` 매니저는
-        #    `status` 서브리소스만 소유하므로 이 필드들의 소유자가 아니다).
-        #    ✅ 확인: 그 둘을 뺀 desired 로 SSA dry-run → predicted == live **IDENTICAL**.
-        #    ⚠️ 차트가 기본값을 늘리면 `ignoreDifferences` 였다면 그때마다 다시 열거해야 했다 —
-        #       ServerSideDiff 는 원인 자체를 다루므로 목록을 늘릴 일이 없다.
-        argocd.argoproj.io/compare-options: ServerSideDiff=true
-    spec:
-      project: platform
-      source:
-        repoURL: https://kyverno.github.io/kyverno/
-        chart: kyverno-policies
-        # ⚠️ 컨트롤러와 **같은 번호를 유지한다.** 한쪽만 올리지 않는다.
-        targetRevision: 3.8.2
-        helm:
-          parameters:
-            # ─────────────────────────────────────────────────────────────
-            # 🔴 **failurePolicy 는 chart 기본 Fail 에서 Ignore 로 바꾼 유일한 값이다.**
-            #
-            #    validationFailureAction 과 **이름이 비슷하지만 완전히 다른 축**이다:
-            #       · validationFailureAction = **정책을 위반했을 때** 무엇을 하는가 → Audit(차트 기본, 유지)
-            #       · failurePolicy           = **웹훅에 닿지 못할 때** 무엇을 하는가 → Fail(차트 기본)
-            #
-            #    **Audit + Fail 은 비정합이다.** 아무것도 막지 않기로 결정해 놓고,
-            #    Kyverno 가 죽으면 **전부 막는다** — 얻는 것 없이 가용성만 깎는다.
-            #
-            #    background:true(차트 기본)라 잃는 것이 거의 없다 — 웹훅을 놓쳐도
-            #       **백그라운드 스캔이 PolicyReport 를 만든다.** 잃는 것은 *실시간성* 뿐이다.
-            #
-            #    ⚠️ **Enforce 로 전환할 때 Fail 로 함께 올린다.** 두 값은 **짝으로 움직인다** —
-            #       한쪽만 바꾸면 다시 비정합이 된다. 그리고 그때 위 argocd ns 질문을 먼저 답한다.
-            # ─────────────────────────────────────────────────────────────
-            - name: failurePolicy
-              value: Ignore
-        # ⛔ validationFailureAction 을 적지 않는다 — **Audit 이 차트 기본값이다**(차트 values.yaml 확인).
-        #    기본값을 옮겨 적으면 차트를 올릴 때 그 줄이 조용히 낡는다(argocd-values.yaml 과 같은 규율).
-        # ⛔ podSecurityStandard 도 적지 않는다 — 기본이 `baseline` 이고 그것이 우리가 원하는 값이다.
-      destination:
-        server: '{{server}}'
-        # ClusterPolicy 는 cluster-scoped 라 이 ns 는 형식상 값이다(Karpenter CR 과 같다).
-        namespace: kyverno
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
-          - SkipDryRunOnMissingResource=true
-          - ServerSideApply=true
----
-# ────────────────────────────────────────────────────────────────────────────
-# ②-nonprd PSS 정책 — staged 전파의 nonprd 티어
-#
-# ⛔ **②-prd 와 함께 고친다.** failurePolicy 근거와 적지 않기로 한 값들(validationFailureAction·
-#    podSecurityStandard)은 위 ②-prd 블록이 소유한다. 값이 갈려야 하는 것은 `targetRevision` 뿐이다.
-# ⛔ **①-nonprd 와 같은 번호를 유지한다.** 한쪽만 올리지 않는다.
-# ────────────────────────────────────────────────────────────────────────────
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: kyverno-policies-nonprd
-  namespace: argocd
-spec:
-  generators:
-    - clusters:
-        selector:
-          matchLabels:
-            tier: nonprd
-  template:
-    metadata:
-      name: '{{name}}-kyverno-policies'
-      finalizers:
-        - resources-finalizer.argocd.argoproj.io
-      annotations:
-        argocd.argoproj.io/sync-wave: "5"
-        argocd.argoproj.io/compare-options: ServerSideDiff=true
-    spec:
-      project: platform
-      source:
-        repoURL: https://kyverno.github.io/kyverno/
-        chart: kyverno-policies
-        # ①-nonprd 와 같은 번호. 승격 대기 중에는 prd 보다 앞선다.
-        targetRevision: 3.8.2
-        helm:
-          parameters:
-            # Audit + Fail 비정합을 피한다 — 근거 전문은 ②-prd 블록.
-            - name: failurePolicy
-              value: Ignore
-      destination:
-        server: '{{server}}'
-        namespace: kyverno
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - SkipDryRunOnMissingResource=true
-          - ServerSideApply=true
----
-# ────────────────────────────────────────────────────────────────────────────
-# ③ 커스텀 정책 — Karpenter 자원 요구사항 강제 (계층 2가 직접 소유하는 정책)
-# ────────────────────────────────────────────────────────────────────────────
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: kyverno-custom-policies
-  namespace: argocd
-spec:
-  generators:
-    - clusters:
-        selector:
-          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
-          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
-          # 라벨 자체가 없어 여기 걸리지 않는다.
-          matchExpressions:
-            - key: environment
-              operator: Exists
-  template:
-    metadata:
-      name: '{{name}}-kyverno-custom-policies'
-      finalizers:
-        - resources-finalizer.argocd.argoproj.io
-      annotations:
-        argocd.argoproj.io/sync-wave: "5"
-        # 🔴 ClusterPolicy CRD도 ②(kyverno-policies)와 같은 병이 있다 — 실측(머지 직후
-        #    Application이 OutOfSync로 고착): 우리가 선언하지 않은
-        #    spec.admission=true·spec.emitWarning=false가 live에 존재했다. 둘 다
-        #    Kyverno CRD openAPI 스키마의 default:를 apiserver가 채운 것이라 위 ②의 헤더
-        #    주석과 같은 원인이다. ServerSideDiff 없이는 selfHeal이 매번 "고치고" 다시
-        #    OutOfSync로 돌아오는 무한 루프가 된다.
-        argocd.argoproj.io/compare-options: ServerSideDiff=true
-    spec:
-      project: platform
-      source:
-        # 이 저장소가 직접 소유하는 정책 — 로컬 helm 차트(addons/kyverno/custom-policies/,
-        # Chart.yaml 존재)라서 이 Application은 Helm 타입으로 렌더링되고, root-app의
-        # 최상위 Directory 스캔만 templates/ 안의 마커로 걸러진다. 값이 갈리지 않는데도
-        # 차트인 이유는 Chart.yaml 헤더 참조.
-        repoURL: https://github.com/skax-ca/eks-platform-gitops.git
-        targetRevision: main
-        path: addons/kyverno/custom-policies
-      destination:
-        server: '{{server}}'
-        namespace: kyverno
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
-          - SkipDryRunOnMissingResource=true
           - ServerSideApply=true
