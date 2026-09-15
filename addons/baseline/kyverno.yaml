@@ -5,10 +5,21 @@
 # **①baseline 인 이유**: 정책 엔진은 **가드레일**이고, **옵트인 가드레일은 가드레일이
 #    아니다.** ALBC·Karpenter 와 같은 층에 둔다.
 #
-# ApplicationSet 이 **3개**인 이유는 CRD 순서 + 소유권 분리다 — 파일은 하나로 유지한다(O(1)).
-#    ① 컨트롤러 helm — 차트가 ClusterPolicy 등 CRD 22개를 동봉한다        (sync-wave 0)
-#    ② PSS 정책(ClusterPolicy 11개, 업스트림 kyverno-policies 차트)         (sync-wave 5)
-#    ③ 커스텀 정책(ClusterPolicy, 이 저장소가 직접 소유) — Karpenter 자원 요구사항 강제 (sync-wave 5)
+# ApplicationSet 이 **5개**인 이유는 나누는 축이 **둘**이기 때문이다 — 파일은 하나로 유지한다(O(1)).
+#
+#    축 1 — CRD 순서 + 소유권 분리
+#      ① 컨트롤러 helm — 차트가 ClusterPolicy 등 CRD 22개를 동봉한다        (sync-wave 0)
+#      ② PSS 정책(ClusterPolicy 11개, 업스트림 kyverno-policies 차트)         (sync-wave 5)
+#      ③ 커스텀 정책(ClusterPolicy, 이 저장소가 직접 소유) — Karpenter 자원 요구사항 강제 (sync-wave 5)
+#
+#    축 2 — tier(staged 전파). **①②를 나눈다** ⇒ -prd · -nonprd 가 각각 하나씩.
+#      ①은 admission webhook 컨트롤러라 깨지면 그 클러스터의 모든 배포가 막힌다 ⇒ 비운영에서
+#        먼저 확인하고 승격한다.
+#      ②는 정책 **내용**이라 uniform 이 자연스럽지만, 엔진과 **같은 번호로만 릴리스되므로**
+#        엔진을 따라간다(짝을 깨면 업스트림이 내지 않는 조합이 된다).
+#      ③은 `targetRevision: main` 이라 승격할 버전이 없다 ⇒ 나누지 않는다(uniform).
+#
+#    ⇒ 두 축을 곱하지 않아 6개가 아니라 5개다.
 #    ⚠️ ②와 ③은 소유권이 다르다 — ②는 업스트림 차트 하나로 source가 고정돼 있어 임의의
 #       새 정책을 주입할 수 없다. 그래서 우리가 직접 만든 정책은 ③으로 형제 Application을
 #       따로 둔다(addons/kyverno/custom-policies/, Karpenter NodePool과 같은 이유로
@@ -50,18 +61,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: kyverno
+  # ⚠️ 돌고 있는 클러스터가 있을 때 이 이름을 바꾸지 않는다 — Application 이 GC 되고
+  #    finalizer 가 실물까지 prune 한다(karpenter.yaml 헤더 참조).
+  name: kyverno-prd
   namespace: argocd
 spec:
   generators:
     - clusters:
         selector:
-          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
-          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
-          # 라벨 자체가 없어 여기 걸리지 않는다.
-          matchExpressions:
-            - key: environment
-              operator: Exists
+          # staged 전파 — prd 티어.
+          # 🔑 정책 엔진은 **가드레일이면서 동시에 admission webhook 컨트롤러**다. 엔진이
+          #    깨지면 노드가 안 생기는 정도가 아니라 **그 클러스터의 모든 배포가 막힌다**
+          #    (아래 "Enforce 로 전환하면 순환 의존" 주석과 같은 축의 위험이다).
+          #    ⇒ 정책 **내용**은 티어 간 차이가 위험이지만, **엔진**은 비운영에서 먼저 확인하고
+          #      승격하는 편이 싸다. 그래서 ①②는 staged, ③은 uniform 이다.
+          matchLabels:
+            tier: prd
   template:
     metadata:
       name: '{{name}}-kyverno'
@@ -132,23 +147,82 @@ spec:
           - ServerSideApply=true
 ---
 # ────────────────────────────────────────────────────────────────────────────
-# ② PSS 정책(ClusterPolicy 11개) — 계층 2(플랫폼 GitOps)가 소유하는 정책
+# ①-nonprd 엔진 — staged 전파의 nonprd 티어
+#
+# ⛔ **①-prd 와 함께 고친다.** helm values·네임스페이스·ServerSideDiff 근거는 위 ①-prd 블록이
+#    소유하고 여기서는 중복하지 않는다. 값이 갈려야 하는 것은 `targetRevision` 하나뿐이다.
+#
+# 🔑 **승격은 ①②를 짝으로 움직인다.** kyverno 와 kyverno-policies 는 같은 번호로 함께
+#    릴리스되므로(helm index 실측: 3.x stable 51개 전부 양쪽에 존재, policies 단독 릴리스 0개)
+#    한쪽만 올리면 업스트림이 내지 않는 조합이 된다. staged 로 나뉜 지금은 값이 **4개**다:
+#      ①-nonprd · ②-nonprd 를 먼저 올려 검증 → ①-prd · ②-prd 를 같은 값으로 올린다.
+#    ⇒ 티어 **안에서는** 엔진과 정책이 항상 같은 번호다. 승격 구간에만 티어 간 차이가 있다.
 # ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: kyverno-policies
+  name: kyverno-nonprd
   namespace: argocd
 spec:
   generators:
     - clusters:
         selector:
-          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
-          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
-          # 라벨 자체가 없어 여기 걸리지 않는다.
-          matchExpressions:
-            - key: environment
-              operator: Exists
+          matchLabels:
+            tier: nonprd
+  template:
+    metadata:
+      name: '{{name}}-kyverno'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
+    spec:
+      project: platform
+      source:
+        repoURL: https://kyverno.github.io/kyverno/
+        chart: kyverno
+        # 승격 대기 중에는 이 값이 prd 보다 앞선다. ②-nonprd 와 **같은 번호**를 유지한다.
+        targetRevision: 3.8.2
+        helm:
+          values: |
+            global:
+              tolerations:
+                - key: workload-class
+                  operator: Equal
+                  value: system
+                  effect: NoSchedule
+      destination:
+        server: '{{server}}'
+        namespace: kyverno
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# ────────────────────────────────────────────────────────────────────────────
+# ② PSS 정책(ClusterPolicy 11개) — 계층 2(플랫폼 GitOps)가 소유하는 정책
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  # ⚠️ 돌고 있는 클러스터가 있을 때 이 이름을 바꾸지 않는다(karpenter.yaml 헤더 참조).
+  name: kyverno-policies-prd
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          # staged 전파 — prd 티어.
+          # 🔑 정책 **내용**만 보면 uniform 이 맞다(클러스터 간 차이가 곧 통과 기준의 차이다).
+          #    그런데 이 차트는 엔진과 **같은 번호로만 릴리스된다** ⇒ 엔진이 staged 면 이것도
+          #    따라가야 짝이 유지된다. 티어 안에서는 항상 같은 번호이고, 차이는 승격 구간에만 있다.
+          #    ⛔ ③(우리가 만든 정책)은 이 제약이 없어 uniform 으로 남는다.
+          matchLabels:
+            tier: prd
   template:
     metadata:
       name: '{{name}}-kyverno-policies'
@@ -204,6 +278,55 @@ spec:
           selfHeal: true
         syncOptions:
           # ①이 CRD 를 막 만든 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
+          - SkipDryRunOnMissingResource=true
+          - ServerSideApply=true
+---
+# ────────────────────────────────────────────────────────────────────────────
+# ②-nonprd PSS 정책 — staged 전파의 nonprd 티어
+#
+# ⛔ **②-prd 와 함께 고친다.** failurePolicy 근거와 적지 않기로 한 값들(validationFailureAction·
+#    podSecurityStandard)은 위 ②-prd 블록이 소유한다. 값이 갈려야 하는 것은 `targetRevision` 뿐이다.
+# ⛔ **①-nonprd 와 같은 번호를 유지한다.** 한쪽만 올리지 않는다.
+# ────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kyverno-policies-nonprd
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            tier: nonprd
+  template:
+    metadata:
+      name: '{{name}}-kyverno-policies'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
+    spec:
+      project: platform
+      source:
+        repoURL: https://kyverno.github.io/kyverno/
+        chart: kyverno-policies
+        # ①-nonprd 와 같은 번호. 승격 대기 중에는 prd 보다 앞선다.
+        targetRevision: 3.8.2
+        helm:
+          parameters:
+            # Audit + Fail 비정합을 피한다 — 근거 전문은 ②-prd 블록.
+            - name: failurePolicy
+              value: Ignore
+      destination:
+        server: '{{server}}'
+        namespace: kyverno
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
           - SkipDryRunOnMissingResource=true
           - ServerSideApply=true
 ---
