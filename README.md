@@ -171,9 +171,10 @@ brew install shellcheck        # 셸 게이트가 요구한다. 없으면 훅이
 
 `.githooks/pre-commit`이 staged 파일 중 `addons/`·`projects/`·`clusters/`·`bootstrap/`의
 `.yaml`/`.sh`, 저장소 `.md`, `scripts/*.py`, `.githooks/*`를 골라
-`scripts/validate-comment-conventions.py`에 넘긴다. 검사기는 주석에 **좌표**(날짜·문서 절
-번호·결정 식별자·세션 번호, 그리고 측정을 사건으로 적은 서술)가 있는지만 본다 — 언제 누가 왜
-바꿨는지는 `git blame`과 커밋 메시지가 답한다. 규칙 자체의 SSOT는 `iac-module-library`의
+`scripts/validate-comment-conventions.py`에 넘긴다. 검사기는 주석에 **외부 참조**(문서 절
+번호·결정 식별자)와 **이력 서술**(날짜·세션 번호, 그리고 측정을 사건으로 적은 서술)이 있는지만
+본다 — 외부 참조는 가리키는 쪽이 움직이면 조용히 틀려지고, 이력 서술은 언제 누가 왜 바꿨는지를
+`git blame`과 커밋 메시지가 이미 답한다. 규칙 자체의 SSOT는 `iac-module-library`의
 `docs/conventions.md`와 `docs/writing-style.md`이고, 검사기는 규칙 텍스트를 다시 쓰지 않는다.
 정확한 패턴 목록은 검사기 자신이 갖는다.
 

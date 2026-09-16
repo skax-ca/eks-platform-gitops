@@ -3,16 +3,17 @@
 # 규칙 SSOT 는 그 두 문서다. 여기서 규칙 텍스트를 다시 쓰지 않는다. 기계로 판정 가능한 것만
 # 잡는다:
 #
-#  1. 주석 줄의 좌표: 절 번호 인용 기호, 결정 식별자(D-XX·D25 등), 날짜(YYYY-MM-DD),
-#     문서 절 번호("N절"), "실측"·"N차 세션" 같은 사건 서술. 언제 누가 왜 바꿨는지는
-#     git blame 과 커밋 메시지가 답한다.
+#  1. 주석 줄의 외부 참조: 절 번호 인용 기호, 결정 식별자(D-XX·D25 등), 문서 절 번호("N절").
+#     가리키는 쪽이 움직이면 주석이 조용히 틀려진다. 가리키던 내용을 본문으로 옮겨 쓴다.
+#  2. 주석 줄의 이력 서술: 날짜(YYYY-MM-DD), "실측"·"N차 세션" 같은 사건 서술. 통째로 지운다.
+#     언제 누가 왜 바꿨는지는 git blame 과 커밋 메시지가 답한다.
 #
 #  적용 범위: addons/** · projects/** · clusters/** · bootstrap/** 의 *.yaml, *.sh,
 #  저장소 *.md, scripts/*.py, .githooks/*.
 #
 #  ⛔ 검사 대상은 주석뿐이다. YAML 블록 스칼라(description: | 등) 안의 산문까지 넓히는 안은
 #     기각했다 — 그 자리에는 정책 메시지·차트 설명처럼 숫자와 날짜꼴 문자열이 정상적으로
-#     들어가고, 넓히면 오탐이 사람을 훅 우회로 몰아간다. 블록 스칼라의 좌표는 리뷰가 잡는다.
+#     들어가고, 넓히면 오탐이 사람을 훅 우회로 몰아간다. 블록 스칼라 쪽은 리뷰가 잡는다.
 #
 #  ⚠️ 이 저장소에 .yaml 을 새로 만들 때는 root App 을 함께 생각한다. bootstrap/argocd-app.yaml
 #     의 root App 이 `path: .` + `recurse: true` 라 저장소 어디에 두든 매니페스트로 흡수된다.
@@ -25,13 +26,15 @@ import glob
 import re
 import sys
 
-COORD_PATTERNS = [
-    (re.compile("§"), "절 번호 인용"),
-    (re.compile(r"\bD-[A-Z]|\bD\d{2}\b"), "결정 식별자"),
-    (re.compile(r"\b20\d{2}-\d{2}-\d{2}\b"), "날짜"),
-    (re.compile(r"[0-9]+절"), "문서 절 번호"),
-    (re.compile(r"[0-9]+차 세션"), "세션 번호"),
-    (re.compile("실측"), "사건 서술('실측')"),
+# (범주, 패턴, 라벨). 범주가 고치는 방향을 가른다. 순서는 바꾸지 않는다 - 한 줄에 둘 이상
+# 걸릴 때 보고 순서가 달라진다.
+CHECKS = [
+    ("외부 참조", re.compile("§"), "절 번호 인용"),
+    ("외부 참조", re.compile(r"\bD-[A-Z]|\bD\d{2}\b"), "결정 식별자"),
+    ("이력 서술", re.compile(r"\b20\d{2}-\d{2}-\d{2}\b"), "날짜"),
+    ("외부 참조", re.compile(r"[0-9]+절"), "문서 절 번호"),
+    ("이력 서술", re.compile(r"[0-9]+차 세션"), "세션 번호"),
+    ("이력 서술", re.compile("실측"), "사건 서술('실측')"),
 ]
 
 # 이 스크립트는 규칙을 검출하느라 금지 문자를 리터럴로 담는다. 검사 대상에서 뺀다.
@@ -82,9 +85,11 @@ def check_file(path: str) -> list[str]:
         c = line if is_prose else comment_part(line)
         if c is None:
             continue
-        for pattern, label in COORD_PATTERNS:
+        for category, pattern, label in CHECKS:
             if pattern.search(c):
-                errors.append(f"{path}:{i}: 좌표({label}). 지금 성립하는 이유만 남긴다")
+                errors.append(
+                    f"{path}:{i}: {category}({label}). 지금 성립하는 이유만 남긴다"
+                )
     return errors
 
 
