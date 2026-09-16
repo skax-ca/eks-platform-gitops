@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-#
-# ⛔ 이 파일의 SSOT 는 이 저장소다. 사본이 아니다.
-#    이전에는 eks-reference-infra 의 scripts/argocd-seed.sh 를 vendoring 한 사본이었고
-#    머리에 #V# 배너가 있었다. 그 구조를 걷어냈다: 실행 장소가 workbench 한 곳이고
-#    workbench 는 이 저장소만 클론하므로(ArgoCD GitHub App 설치 범위가 이 저장소 하나),
-#    배포 루트의 원본은 아무도 실행하지 않는 사본이었다. 단방향 복사를 유지할 장치도 없어
-#    문체 정리 한 번에 두 파일이 갈렸다.
-#    ⇒ 고칠 일이 생기면 여기서 고친다. 다른 저장소로 복사하지 않는다.
-#    ⚠️ aks-platform-gitops 의 같은 파일과도 형제가 아니다. 클라우드마다 독립이다.
 # argocd-seed.sh: self-managed ArgoCD 부트스트랩 seed(workbench에서 사람이 실행).
 #
 # 자기소멸(self-superseding) 원칙이 이 스크립트의 설계 제약이다. 매니페스트를 생성하지 않고 GitOps
@@ -17,7 +8,10 @@
 # ⚠️ bash 3.2 호환으로 쓴다. macOS 기본 bash가 3.2이고 이 스크립트는 workbench(bash 5)뿐 아니라
 #    팀원 노트북에서 --dry-run으로도 돌린다. 연상배열·mapfile·${var^^}를 쓰지 않는다.
 #
-# 절차: docs/hub-lifecycle.md. self-managed ArgoCD 선택 근거: iac-module-library
+# 절차: eks-reference-infra 의 docs/hub-lifecycle.md.
+# GH_APP_* 세 값을 발급하고 private key 를 workbench 로 나르는 법(SSM SecureString 왕복)은
+# 같은 저장소의 scripts/README.md. 이 스크립트는 그 값들이 이미 있다고 전제한다.
+# self-managed ArgoCD 선택 근거: iac-module-library 의
 # docs/architectures/gitops-hub-spoke/aws/README.md 「어느 ArgoCD인가」
 set -Eeuo pipefail
 
