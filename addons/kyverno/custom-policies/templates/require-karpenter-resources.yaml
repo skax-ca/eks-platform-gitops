@@ -50,7 +50,7 @@ spec:
                 - Pod
       exclude:
         any:
-          # ArgoCD 자기 자신은 제외한다. 실측(helm show values argo/argo-cd --version
+          # ArgoCD 자기 자신은 제외한다. 확인(helm show values argo/argo-cd --version
           # 10.3.0): 모든 컴포넌트가 resources: {} (기본값 미설정)이고
           # bootstrap/argocd-values.yaml도 그 값을 채우지 않았다 — 지금 켜면 ArgoCD
           # 자신의 재배포가 이 정책에 막힌다(Kyverno 장애 → ArgoCD 막힘 → 고칠 수단

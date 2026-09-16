@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# pre-commit: 주석·문체 게이트
+# 활성화: git config core.hooksPath .githooks  (clone마다 1회)
+# 의도적 우회는 git commit --no-verify (사유를 커밋 메시지에 남길 것)
+#
+# 이 저장소에는 CI 가 없다. ArgoCD 가 main 을 pull 로 reconcile 할 뿐이므로 이 훅이 유일한
+# 강제 지점이다. 규칙 SSOT 는 iac-module-library 의 docs/conventions.md 와 docs/writing-style.md 다.
+#
+# ⛔ 매니페스트 렌더 결과는 검사하지 않는다. 그것은 ArgoCD 가 sync 시점에 판정하고, 여기서
+#    흉내 내면 두 판정이 갈린다.
+set -euo pipefail
+
+changed=$(git diff --cached --name-only --diff-filter=ACMR)
+
+targets=$(printf '%s\n' "$changed" |
+  grep -E '^(addons|projects|clusters|bootstrap)/.*\.(yaml|sh)$|\.md$|^scripts/.*\.py$|^\.githooks/' || true)
+
+[ -z "$targets" ] && exit 0
+
+echo "[pre-commit] 주석·문체 규칙 검사"
+# shellcheck disable=SC2086
+python3 scripts/validate-comment-conventions.py $targets
+
+echo "[pre-commit] 게이트 통과 ✓"

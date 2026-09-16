@@ -16,11 +16,11 @@
 #    · scale-from-zero용 ASG `node-template/*` 태그(managed_node_groups의 labels·taints 미러링)
 #    · auto-discovery 태그(`k8s.io/cluster-autoscaler/enabled` · `.../{{name}}`)는 **AWS가
 #      managed node group 생성 시 자동으로 ASG에 붙인다** — 이 매니페스트도 Terraform 도
-#      만들 필요가 없다(실측: `terraform-aws-modules/terraform-aws-eks#1886`).
+#      만들 필요가 없다(`terraform-aws-modules/terraform-aws-eks#1886`).
 #
 # ✅ **dev 클러스터는 이 addon 을 구독한다**(cluster Secret 라벨) —
 #    `managed_node_groups.system`에 `workload-class=system` taint 가 `eks-reference-infra`
-#    PR #32·#33 으로 이미 반영·실측 검증됐다. taint 분리 없이 CA 를 켜면 CA 가 `system`
+#    PR #32·#33 으로 이미 반영·검증됐다. taint 분리 없이 CA 를 켜면 CA 가 `system`
 #    노드그룹 전체를 auto-discover 해 Karpenter 와 같은 pending pod 를 두고 경쟁할 수 있었는데
 #    (근거: `aws/karpenter-provider-aws#2543`), 아래 `nodeSelector`+`tolerations`가 그 경쟁을
 #    차단한다.
@@ -38,17 +38,17 @@
 #    "근거 3"(집행 장치)과 같은 층으로 세지 않는다. **지금 바꾸려면 두 저장소(Terraform
 #    association + 이 매니페스트)를 함께 고쳐야 한다**는 사실만 정직하게 남긴다.
 #
-# **chart 실측** — `helm repo add autoscaler https://kubernetes.github.io/autoscaler` 로
+# **chart 확인**: `helm repo add autoscaler https://kubernetes.github.io/autoscaler` 로
 #    전수(120개 버전) 조회, appVersion(CA 자체 버전)이 클러스터 k8s 마이너(1.35)와 정확히
 #    일치하는 것 중 최신 = 9.59.0(appVersion 1.35.0). cross-version 은 상류가 테스트·지원하지
 #    않는다(AWS EKS Best Practices Guide) — k8s 를 올릴 때 이 값도 함께 올린다.
-#    chart 에 kubeVersion 제약은 없다(KEDA 와 다름 — 실측: `helm show chart`).
+#    chart 에 kubeVersion 제약은 없다(KEDA 와 다름. `helm show chart` 로 확인).
 #
-# **cluster-scoped 리소스 실측**: `helm template` 로컬 렌더 — ClusterRole 1 · ClusterRoleBinding 1
+# **cluster-scoped 리소스**: `helm template` 로컬 렌더 — ClusterRole 1 · ClusterRoleBinding 1
 #    뿐이다(CRD·APIService 없음). 둘 다 `projects/platform.yaml`의 ALBC 항목과 겹친다 ⇒
 #    clusterResourceWhitelist 에 **추가할 것이 없다**(Karpenter 와 같은 결론).
 #
-# ✅ **egress canary 확인됨**(사용자 실측) — repo-server 가 `kubernetes.github.io`에
+# ✅ **egress canary 확인됨**. repo-server 가 `kubernetes.github.io`에
 #    여러 차례 정상 접근 확인됨. 옵트인 전제조건 충족.
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -67,7 +67,7 @@ spec:
     metadata:
       name: '{{name}}-cluster-autoscaler'
       # 이 finalizer가 없으면 Application CR을 지워도 실제 리소스는 클러스터에
-      # orphan으로 남는다 — spoke teardown 리허설에서 실측 발견
+      # orphan으로 남는다.
       # (addons/baseline/karpenter.yaml 헤더 참조).
       finalizers:
         - resources-finalizer.argocd.argoproj.io
@@ -96,7 +96,7 @@ spec:
           values: |
             # Pod Identity 바인딩 대상(kube-system/cluster-autoscaler). IRSA 애노테이션 불필요.
             # ⚠️ 이 chart 는 ALBC·Karpenter 와 달리 serviceAccount 가 최상위가 아니라 rbac 아래다
-            #    (실측: `helm show values`) — 그대로 복사하면 조용히 무시된다.
+            #    (`helm show values` 로 확인). 그대로 복사하면 조용히 무시된다.
             rbac:
               serviceAccount:
                 create: true
@@ -105,7 +105,7 @@ spec:
             # 자기 자신이 관리하는(=Karpenter 가 만든) 노드에는 못 뜨게 막는다. Karpenter 차트는
             # 이 보호가 기본값으로 내장돼 있지만(`karpenter.sh/nodepool DoesNotExist`,
             # eks-reference-infra 의 system 노드그룹 주석 참조) CA 차트는 affinity 기본값이
-            # 비어 있다(실측) — 그래서 이 매니페스트가 명시로 채운다.
+            # 비어 있다. 그래서 이 매니페스트가 명시로 채운다.
             affinity:
               nodeAffinity:
                 requiredDuringSchedulingIgnoredDuringExecution:
@@ -118,8 +118,8 @@ spec:
             # eks-reference-infra `docs/runbooks.md`의 「Karpenter + Cluster Autoscaler 동시
             # 운영: taint 전략」절과 같은 형태(coredns·metrics-server 와 동일 패턴). 위 negative
             # affinity 는 "Karpenter 노드는 안 됨"만 막고 "system 노드로 가라"는 강제하지
-            # 않으므로 nodeSelector 가 따로 필요하다. 차트 기본값은 둘 다 비어 있다(실측:
-            # `helm show values`).
+            # 않으므로 nodeSelector 가 따로 필요하다. 차트 기본값은 둘 다 비어 있다
+            # (`helm show values` 로 확인).
             nodeSelector:
               workload-class: system
             tolerations:

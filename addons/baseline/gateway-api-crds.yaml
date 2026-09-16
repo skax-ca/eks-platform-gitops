@@ -6,7 +6,7 @@
 #    `aws-load-balancer-controller.yaml`(chart 3.5.0 = appVersion v3.5.0)이 — GA 요구 최소버전
 #    v2.13.0을 이미 넘겨서 — 그대로 담당한다. Terraform 쪽(IAM·모듈 버전)도 변경이 없다:
 #    `terraform-aws-modules/eks-pod-identity` v2.8.2가 붙이는 ALBC 정책에 GA 시대 액션
-#    (DescribeCapacityReservation 등)이 이미 포함돼 있다(GitHub 소스 실측 확인).
+#    (DescribeCapacityReservation 등)이 이미 포함돼 있다(GitHub 소스 확인).
 #    ⇒ 새로 추가할 것은 이 파일 하나뿐이다.
 #
 # ⛔ AWS 전용 Gateway CRD(TargetGroupConfiguration·LoadBalancerConfiguration·
@@ -14,7 +14,7 @@
 #    `aws-load-balancer-controller.yaml`이 쓰는 chart 자신의 `crds/` 폴더에 그 3개가 들어있고,
 #    ArgoCD는 `skipCrds`를 켜지 않는 한 기본적으로 `helm template --include-crds`로 렌더하므로
 #    이미 설치돼 있다(`helm template aws-lbc eks-charts/aws-load-balancer-controller --version
-#    3.5.0 --include-crds`로 로컬 렌더해 3개 CRD가 출력에 포함됨을 실측 확인). 별도 Application을
+#    3.5.0 --include-crds`로 로컬 렌더해 3개 CRD가 출력에 포함됨을 확인). 별도 Application을
 #    또 만들면 같은 CRD를 두 Application이 동시에 소유하려는 충돌이 난다 — 이 저장소가 이미 아는
 #    표준 Gateway API CRD(gateway.networking.k8s.io 그룹)만 이 파일이 담당하는 이유다.
 #
@@ -53,7 +53,7 @@ spec:
       project: platform
       source:
         repoURL: https://github.com/kubernetes-sigs/gateway-api.git
-        # 실측 핀 — GitHub Releases 중 prerelease가 아닌 최신 stable. 다음에 올릴 때는
+        # 핀 근거: GitHub Releases 중 prerelease가 아닌 최신 stable. 다음에 올릴 때는
         # releases API로 다시 확인한다(기존 핀 값을 여기 남기지 않는다 — git이 이력을 갖는다).
         targetRevision: v1.6.2
         # kustomization.yaml이 없는 순수 YAML 11개 디렉토리라 ArgoCD가 Directory 타입으로 렌더한다.

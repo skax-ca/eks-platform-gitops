@@ -14,7 +14,7 @@ environment: ""
 scheme: internal
 
 # 🔴 빈 배열 — 의도적으로 아무 CIDR도 허용하지 않는다. ALBC 소스(model_build_security_group.go)
-#    실측 확인: sourceRanges가 nil이면(필드 자체를 안 쓰면) 기본값 0.0.0.0/0·::/0로 열리지만,
+#    확인: sourceRanges가 nil이면(필드 자체를 안 쓰면) 기본값 0.0.0.0/0·::/0로 열리지만,
 #    **빈 배열을 명시하면** 그 값이 기본값을 덮어써서 인바운드 규칙이 0개가 된다(SG는 만들어지되
 #    아무도 못 들어옴). 지금은 HTTPRoute도 백엔드도 없어 실제 호출자가 누구인지 모른다 — CIDR을
 #    추측해서 미리 열어두지 않는다(GatewayClass·Gateway를 첫 소비자 전까지 안 만들던 것과 같은
