@@ -56,6 +56,9 @@ spec:
         repoURL: https://kyverno.github.io/kyverno/
         chart: kyverno-policies
         # ⚠️ 컨트롤러와 **같은 마이너 라인**을 유지한다. 이 라인(3.8)은 양쪽에 같은 번호가 있다.
+        # 🔴 **3.9 로 올리면 이 차트가 렌더하는 kind 가 바뀐다** (`policyType` 기본값이
+        #    `ClusterPolicy` ⇒ `ValidatingPolicy`). 근거와 선택지는 `kyverno.yaml` 의 핀 주석이
+        #    갖는다. 이 값만 먼저 올리지 않는다.
         targetRevision: 3.8.2
         helm:
           parameters:

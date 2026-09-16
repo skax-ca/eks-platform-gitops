@@ -99,8 +99,16 @@ spec:
       source:
         repoURL: https://kyverno.github.io/kyverno/
         chart: kyverno
-        # 실측 핀 — index.yaml 전수 263개 중 stable 79개를 semver 정렬한 최신.
-        # chart kubeVersion `>=1.25.0-0` · 클러스터 1.35.6 ⇒ 충족.
+        # 🔴 **3.8 라인에 머무는 이유**(상류 최신은 3.9 다): 3.9.0 부터 ②kyverno-policies 의
+        #    `policyType` 기본값이 `ClusterPolicy` 에서 `ValidatingPolicy`(policies.kyverno.io,
+        #    CEL 기반)로 바뀐다. 차트 values.yaml 실측이다.
+        #    ⇒ 라인을 넘기면 ②가 렌더하는 **kind 자체가 달라진다.** AppProject 의
+        #      clusterResourceWhitelist 에는 `kyverno.io/ClusterPolicy` 만 열려 있고
+        #      (projects/platform.yaml), ③(우리 커스텀 정책)도 ClusterPolicy 다.
+        #    ⇒ 3.9 로 올릴 때는 ②에 `policyType=ClusterPolicy` 를 명시해 현행 kind 를 유지하거나,
+        #      whitelist 와 ③를 함께 옮긴다. **둘 중 무엇을 할지는 승격 전에 답한다.**
+        #    ⚠️ 버전 제약이 아니다. 3.8·3.9 둘 다 kubeVersion `>=1.25.0-0` 이고 클러스터 1.35.6 은
+        #       양쪽을 충족한다.
         # kyverno-policies 와 **같은 마이너 라인**을 유지한다. 이 라인(3.8)은 양쪽에 같은 번호가 있다.
         targetRevision: 3.8.2
         # ⚠️ tolerations 하나만 예외로 넘긴다 — "기본값을 그대로 받는다"는 결정은 유지하되
