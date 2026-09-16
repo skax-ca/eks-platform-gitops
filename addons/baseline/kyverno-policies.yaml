@@ -5,10 +5,13 @@
 # **Kyverno 파일 3개 중 ②다** — ① 엔진은 `kyverno.yaml`, ③ 커스텀 정책은
 #    `kyverno-custom-policies.yaml`. 파일이 나뉜 이유와 승격 순서는 `kyverno.yaml` 헤더가 갖는다.
 #
-# ⛔ **엔진(①)과 같은 번호를 유지한다. 한쪽만 올리지 않는다.** 두 차트는 같은 번호로만
-#    릴리스되므로(policies 단독 릴리스 0개) 짝을 깨면 업스트림이 내지 않는 조합이 된다.
+# ⛔ **엔진(①)과 같은 마이너 라인을 유지한다.** 차트 번호 일치가 아니다. 이 차트가 요구하는
+#    것은 엔진 app 버전의 **하한**이고(차트 README: PSS 정책은 Kyverno 1.6.0 이상), 라인이
+#    갈리면 정책 내용이 전제한 app 버전과 어긋난다.
 #    ⇒ 정책 **내용**만 보면 uniform 이 맞지만, 엔진이 staged 라 이것도 따라간다. 티어 **안에서는**
-#      엔진과 정책이 항상 같은 번호이고, 차이는 승격 구간에만 있다.
+#      엔진과 정책이 항상 같은 라인이고, 차이는 승격 구간에만 있다.
+#    ⚠️ 라인 안에서 엔진만 앞서는 것은 정상이다. 이 차트는 그 라인 최신 패치에 두면 된다
+#       (엔진 단독 릴리스 8건의 근거는 kyverno.yaml 헤더가 갖는다).
 #
 # 🔴 Terraform 전제: **없다.** ①과 같다.
 #
@@ -27,8 +30,8 @@ spec:
         selector:
           # staged 전파 — prd 티어.
           # 🔑 정책 **내용**만 보면 uniform 이 맞다(클러스터 간 차이가 곧 통과 기준의 차이다).
-          #    그런데 이 차트는 엔진과 **같은 번호로만 릴리스된다** ⇒ 엔진이 staged 면 이것도
-          #    따라가야 짝이 유지된다. 티어 안에서는 항상 같은 번호이고, 차이는 승격 구간에만 있다.
+          #    그런데 이 차트는 엔진과 **같은 마이너 라인**이어야 한다 ⇒ 엔진이 staged 면 이것도
+          #    따라가야 짝이 유지된다. 티어 안에서는 항상 같은 라인이고, 차이는 승격 구간에만 있다.
           #    ⛔ ③(우리가 만든 정책)은 이 제약이 없어 uniform 으로 남는다.
           matchLabels:
             tier: prd
@@ -52,7 +55,7 @@ spec:
       source:
         repoURL: https://kyverno.github.io/kyverno/
         chart: kyverno-policies
-        # ⚠️ 컨트롤러와 **같은 번호를 유지한다.** 한쪽만 올리지 않는다.
+        # ⚠️ 컨트롤러와 **같은 마이너 라인**을 유지한다. 이 라인(3.8)은 양쪽에 같은 번호가 있다.
         targetRevision: 3.8.2
         helm:
           parameters:
@@ -95,7 +98,7 @@ spec:
 #
 # ⛔ **②-prd 와 함께 고친다.** failurePolicy 근거와 적지 않기로 한 값들(validationFailureAction·
 #    podSecurityStandard)은 위 ②-prd 블록이 소유한다. 값이 갈려야 하는 것은 `targetRevision` 뿐이다.
-# ⛔ **①-nonprd 와 같은 번호를 유지한다.** 한쪽만 올리지 않는다.
+# ⛔ **①-nonprd 와 같은 마이너 라인을 유지한다.**
 # ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -121,7 +124,7 @@ spec:
       source:
         repoURL: https://kyverno.github.io/kyverno/
         chart: kyverno-policies
-        # ①-nonprd 와 같은 번호. 승격 대기 중에는 prd 보다 앞선다.
+        # ①-nonprd 와 같은 마이너 라인. 승격 대기 중에는 prd 보다 앞선다.
         targetRevision: 3.8.2
         helm:
           parameters:
