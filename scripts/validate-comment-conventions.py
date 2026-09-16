@@ -10,11 +10,6 @@
 #  적용 범위: addons/** · projects/** · clusters/** · bootstrap/** 의 *.yaml, *.sh,
 #  저장소 *.md, scripts/*.py, .githooks/*.
 #
-#  ⚠️ vendored copy(bootstrap/argocd-seed.sh)도 검사 대상이다. 훅은 staged 파일만 보므로
-#     평소에는 걸리지 않고, re-vendoring 할 때 새로 들여온 사본을 검증한다. 위반이 나오면
-#     사본이 아니라 SSOT(eks-reference-infra)를 고치고 다시 복사한다. 그 파일 배너가
-#     같은 규약을 적고 있다.
-#
 #  ⚠️ 이 저장소에 .yaml 을 새로 만들 때는 root App 을 함께 생각한다. bootstrap/argocd-app.yaml
 #     의 root App 이 `path: .` + `recurse: true` 라 저장소 어디에 두든 매니페스트로 흡수된다.
 #     이 스크립트와 훅이 .py 와 확장자 없는 파일인 것은 그래서다.

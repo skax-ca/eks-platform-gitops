@@ -16,7 +16,7 @@
 - [이 저장소가 다루는 것 / 다루지 않는 것](#이-저장소가-다루는-것--다루지-않는-것)
 - [레이아웃](#레이아웃)
 - [부트스트랩 — 자기소멸(self-superseding) 원칙](#부트스트랩--자기소멸self-superseding-원칙)
-- [`bootstrap/argocd-seed.sh` — vendoring 규약](#bootstrapargocd-seedsh--vendoring-규약)
+- [`bootstrap/argocd-seed.sh` — 이 저장소가 소유한다](#bootstrapargocd-seedsh--이-저장소가-소유한다)
 - [root App 스캔에서 파일을 빼는 방법 — 마커, `exclude` 아님](#root-app-스캔에서-파일을-빼는-방법--마커-exclude-아님)
 - [알아야 할 규약](#알아야-할-규약)
   - [addon 네임스페이스 규칙](#addon-네임스페이스-규칙)
@@ -57,7 +57,7 @@ Application / ApplicationSet / AppProject 자체는 양쪽이 동일하다.
 bootstrap/root-app.yaml      # App-of-Apps root — seed 대상. 이후 자기 자신을 흡수
 bootstrap/argocd-values.yaml # ArgoCD 자신의 helm values. root App 스캔에서 제외됨
 bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application. 위 values를 $values로 읽는다
-bootstrap/argocd-seed.sh     # VENDORED — seed 실행 스크립트. SSOT는 모듈 repo(아래 절)
+bootstrap/argocd-seed.sh     # seed 실행 스크립트. 이 저장소가 소유한다(아래 절)
 clusters/<env>/<cluster>/    # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개(O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
 addons/baseline/             # 전 클러스터 팬아웃 ApplicationSet(environment 라벨)
@@ -89,23 +89,27 @@ addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPo
 - ⛔ **helm values도 예외 없음(0단계)**: `helm install -f`에 넘기는 값은 저장소 파일 그대로 써야 하며, `--set`은 쓰지 않는다.
 - ⛔ **완료 조건**: 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제. 선택이 아니라 완료 조건이다.
 
-## `bootstrap/argocd-seed.sh` — vendoring 규약
+## `bootstrap/argocd-seed.sh` — 이 저장소가 소유한다
 
-**SSOT는 이 저장소가 아니라 [`skax-ca/eks-reference-infra`의 `scripts/argocd-seed.sh`](https://github.com/skax-ca/eks-reference-infra/blob/main/scripts/argocd-seed.sh)다.**
+**SSOT는 이 저장소다.** 고칠 일이 생기면 여기서 고친다. 다른 저장소로 복사하지 않는다.
 
-⛔ **이 사본을 편집하지 않는다.** 고칠 일이 생기면 SSOT 저장소를 고치고 여기로 다시 복사한다.
+**왜 여기인가**: 이 스크립트를 실행하는 곳은 workbench 하나뿐이고, workbench는 이 저장소만
+클론한다. ArgoCD를 여는 GitHub App의 설치 범위가 이 저장소 하나여서(배포 코드까지 읽게 하지
+않으려는 제약) 다른 저장소는 workbench에 도달하지 않는다. 클론 한 번으로 매니페스트와 스크립트가
+함께 온다.
 
-**사본이 필요한 이유**
-- workbench는 SSM 전용이라 `scp`가 없다.
-- 이 저장소를 여는 GitHub App의 설치 범위는 이 저장소 하나뿐이다 — SSOT 저장소까지 범위에 넣으면 ArgoCD가 배포 코드까지 읽게 된다.
-- 사본이 여기 있으면 클론 한 번으로 매니페스트와 스크립트가 함께 온다.
+⚠️ `aks-platform-gitops`의 같은 이름 파일과 형제가 아니다. 클라우드마다 독립이고, 한쪽을
+고쳐도 다른 쪽에 반영하지 않는다. 실제로 갈리는 값이 있다(`--help`의 저장소 경로·클러스터
+디렉토리 예시).
 
-**드리프트 검사**(SSOT 저장소 체크아웃에서 한 줄):
-```bash
-diff <(grep -v '^#V#' bootstrap/argocd-seed.sh) <eks-reference-infra>/scripts/argocd-seed.sh
-```
-사본 머리의 vendoring 배너는 모든 줄이 `#V#`로 시작한다 — 그 줄을 뺀 나머지는 SSOT와 바이트 단위로
-같아야 한다.
+### 이전 구조를 되살리지 않는다
+
+`eks-reference-infra`의 `scripts/argocd-seed.sh`를 SSOT로 두고 이 파일을 `#V#` 배너가 붙은
+사본으로 유지하던 구조였다. 걷어낸 이유는 둘이다.
+
+- **원본을 아무도 실행하지 않았다.** 실행 장소가 workbench 하나인데 거기에는 이 저장소만 있다.
+- **단방향 복사를 유지할 장치가 없었다.** 드리프트 검사를 사람이 기억해서 돌리는 구조였고,
+  문체 정리 한 번에 두 파일이 갈렸다. 무해한 변경일수록 사본에 도달하지 않는다.
 
 ---
 

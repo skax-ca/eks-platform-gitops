@@ -1,54 +1,26 @@
 #!/usr/bin/env bash
-#V# ═══════════════════════════════════════════════════════════════════════════
-#V#  VENDORED COPY — ⛔ 이 파일을 편집하지 마시오.
-#V#
-#V#  SSOT : skax-ca/eks-reference-infra · scripts/argocd-seed.sh
-#V#  출처 : d8ea58e62c1dbe4294d7462197377d35199b3ee1
-#V#
-#V#  왜 사본이 여기 있나 — workbench 는 SSM 전용이라 scp 가 없고, 이 GitOps 저장소를 여는
-#V#  GitHub App 의 설치 범위는 이 저장소 하나뿐이다(SSOT 저장소까지 그 범위에 넣으면 ArgoCD 가
-#V#  배포 코드까지 읽게 된다). 사본을 여기 두면 **클론 한 번으로 매니페스트와 스크립트가 함께**
-#V#  온다. 두 번째 배달 메커니즘을 만들지 않는다.
-#V#
-#V#  ⚠️ 경쟁 SSOT 가 아니라 vendoring 이다. 구분 기준은 "어디를 고치는가" 하나다 —
-#V#     고칠 일이 생기면 **SSOT 저장소를 고치고 여기로 다시 복사**한다. 여기서 고치면 그때 drift 다.
-#V#
-#V#  🔍 드리프트 검사 (eks-reference-infra 체크아웃에서, <gitops> 는 이 저장소 경로):
-#V#     diff <(grep -v '^#V#' <gitops>/bootstrap/argocd-seed.sh) scripts/argocd-seed.sh
-#V#     ⇒ 이 배너를 뺀 나머지는 SSOT 와 **바이트 단위로 같아야 한다.**
-#V#     배너 줄에 전부 #V# 접두를 둔 이유가 이것이다 — 검사를 한 줄로 끝내려고.
-#V#
-#V#  📌 git 태그가 아니라 **커밋 SHA 로 핀한다** — 이 스크립트는 배포 대상 모듈이 아니라
-#V#     운영 절차 파일이라 semver 태그 축이 없다. "어느 버전인지 드러낸다"는 요건은
-#V#     커밋 SHA 로도 그대로 충족되고, 오히려 더 정확하다.
-#V#
-#V#  🔄 다시 vendoring 하는 법 — 이 저장소 README.md 「bootstrap/argocd-seed.sh — vendoring
-#V#     규약」 절.
-#V# ═══════════════════════════════════════════════════════════════════════════
 #
-# argocd-seed.sh — self-managed ArgoCD 부트스트랩 seed (workbench 에서 사람이 실행)
+# ⛔ 이 파일의 SSOT 는 이 저장소다. 사본이 아니다.
+#    이전에는 eks-reference-infra 의 scripts/argocd-seed.sh 를 vendoring 한 사본이었고
+#    머리에 #V# 배너가 있었다. 그 구조를 걷어냈다: 실행 장소가 workbench 한 곳이고
+#    workbench 는 이 저장소만 클론하므로(ArgoCD GitHub App 설치 범위가 이 저장소 하나),
+#    배포 루트의 원본은 아무도 실행하지 않는 사본이었다. 단방향 복사를 유지할 장치도 없어
+#    문체 정리 한 번에 두 파일이 갈렸다.
+#    ⇒ 고칠 일이 생기면 여기서 고친다. 다른 저장소로 복사하지 않는다.
+#    ⚠️ aks-platform-gitops 의 같은 파일과도 형제가 아니다. 클라우드마다 독립이다.
+# argocd-seed.sh: self-managed ArgoCD 부트스트랩 seed(workbench에서 사람이 실행).
 #
-# 설계 SSOT:
-#   iac-module-library docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
-#                                  self-managed ArgoCD 선택 근거
-#   docs/hub-lifecycle.md         seed 를 포함한 착수 절차(이 repo)
+# 자기소멸(self-superseding) 원칙이 이 스크립트의 설계 제약이다. 매니페스트를 생성하지 않고 GitOps
+# 저장소에 커밋된 파일을 그대로 apply한다. 생성하면 커밋본과 바이트가 달라지고 그 차이가 영구
+# 드리프트로 남는다. 그래서 --set도 인라인 heredoc 매니페스트도 쓰지 않는다.
+# ⚠️ 예외는 단 하나, repository Secret(2단계)이다. private key를 담아 커밋할 수 없다.
+# ⚠️ bash 3.2 호환으로 쓴다. macOS 기본 bash가 3.2이고 이 스크립트는 workbench(bash 5)뿐 아니라
+#    팀원 노트북에서 --dry-run으로도 돌린다. 연상배열·mapfile·${var^^}를 쓰지 않는다.
 #
-# ⭐ 자기소멸(self-superseding) 원칙이 이 스크립트의 설계 제약이다.
-#    이 스크립트는 매니페스트를 **생성하지 않는다** — GitOps 저장소에 커밋된 파일을
-#    **그대로 apply** 한다. 생성하면 커밋본과 바이트가 달라지고, 그 차이가 영구 드리프트로 남는다.
-#    그래서 --set 도, 인라인 heredoc 매니페스트도 쓰지 않는다.
-#    ⚠️ 예외는 단 하나: repository Secret(2단계). private key 를 담아 커밋할 수 없다.
-#
-# ⚠️ 이 repo 는 배포하지 않는다. 이 스크립트는 **소비 프로젝트가 실행하는 절차**이며,
-#    여기서는 재사용 자산으로만 소유한다(하드코딩 금지).
-#
-# ⚠️ bash 3.2 호환으로 쓴다 — macOS 기본 bash 가 3.2 이고(실측), 이 스크립트는 workbench(bash 5)
-#    뿐 아니라 팀원 노트북에서 --dry-run 으로도 돌린다. 연상배열·mapfile·${var^^} 를 쓰지 않는다.
+# 절차: docs/hub-lifecycle.md. self-managed ArgoCD 선택 근거: iac-module-library
+# docs/architectures/gitops-hub-spoke/aws/README.md 「어느 ArgoCD인가」
 set -Eeuo pipefail
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 사용법
-# ─────────────────────────────────────────────────────────────────────────────
 usage() {
   cat <<'USAGE'
 사용법: argocd-seed.sh [--dry-run] [--from STEP] [--to STEP]
@@ -59,10 +31,10 @@ GitOps 저장소를 pull 하는 self-managed ArgoCD 를 부트스트랩한다.
   0  helm install argo-cd            (저장소의 values 파일 그대로)
   2  GitHub App repository Secret    (자기소멸 원칙의 유일한 예외)
   3  platform AppProject
-  4  cluster Secret                  (라벨·이름 공급 — "등록"이 아니다)
+  4  cluster Secret                  (라벨·이름 공급. "등록"이 아니다)
   5  root Application                (자기 자신을 흡수)
 
-  ℹ️ 1단계(Access Entry)는 self-managed 에 없다 — ArgoCD 가 클러스터 안에 있다.
+  1단계(Access Entry)는 self-managed 에 없다. ArgoCD 가 클러스터 안에 있다.
      spoke 클러스터를 붙일 때만 필요하며 그것은 Terraform 소관이다.
 
 필수 환경변수
@@ -84,7 +56,7 @@ GitOps 저장소를 pull 하는 self-managed ArgoCD 를 부트스트랩한다.
   export GITOPS_REPO_DIR=~/eks-platform-gitops
   export CLUSTER_DIR=clusters/dev/eks-ref-dev-an2-main-01
   export GITOPS_REPO_URL=https://github.com/skax-ca/eks-platform-gitops.git
-  export GH_APP_ID=4512318 GH_APP_INSTALLATION_ID=... GH_APP_PRIVATE_KEY=~/key.pem
+  export GH_APP_ID=... GH_APP_INSTALLATION_ID=... GH_APP_PRIVATE_KEY=~/key.pem
   ./argocd-seed.sh --dry-run     # 먼저 이것부터 돌린다
   ./argocd-seed.sh
 USAGE
@@ -104,9 +76,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ─────────────────────────────────────────────────────────────────────────────
 # 출력
-# ─────────────────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
   C_OK=$'\033[32m'; C_WARN=$'\033[33m'; C_ERR=$'\033[31m'; C_HEAD=$'\033[1;36m'; C_OFF=$'\033[0m'
 else
@@ -123,9 +93,7 @@ run()  {
 # 실행할 단계인지
 want() { local s=$1; (( s >= FROM_STEP && s <= TO_STEP )); }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 사전 점검 — 여기서 막는 것이 클러스터에서 반쯤 진행된 상태보다 싸다
-# ─────────────────────────────────────────────────────────────────────────────
+# 사전 점검. 여기서 막는 것이 클러스터에서 반쯤 진행된 상태보다 싸다.
 step "preflight" "전제 확인"
 
 for v in GITOPS_REPO_DIR CLUSTER_DIR GH_APP_ID GH_APP_INSTALLATION_ID GH_APP_PRIVATE_KEY GITOPS_REPO_URL; do
@@ -146,21 +114,21 @@ for c in kubectl helm; do
 done
 ok "kubectl · helm 존재"
 
-# ⭐ 자기소멸 원칙의 집행 — 저장소가 커밋 상태여야 한다.
-#    dirty 인 채로 seed 하면 apply 된 내용이 저장소 어디에도 없고, root App 이 흡수한 순간
-#    selfHeal 이 그것을 되돌린다. 증상은 "방금 넣은 설정이 사라진다"이고 원인을 가리키지 않는다.
+# 자기소멸 원칙의 집행. 저장소가 커밋 상태여야 한다.
+# ⚠️ dirty인 채로 seed하면 apply된 내용이 저장소 어디에도 없고, root App이 흡수한 순간 selfHeal이
+#    그것을 되돌린다. 증상은 "방금 넣은 설정이 사라진다"이고 원인을 가리키지 않는다.
 if git -C "$GITOPS_REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
   if [[ -n "$(git -C "$GITOPS_REPO_DIR" status --porcelain)" ]]; then
     git -C "$GITOPS_REPO_DIR" status --short | sed 's/^/       /'
-    die "GitOps 저장소에 커밋되지 않은 변경이 있다 — 자기소멸 원칙이 깨진다. 커밋·push 후 다시 실행하라"
+    die "GitOps 저장소에 커밋되지 않은 변경이 있다(자기소멸 원칙이 깨진다). 커밋·push 후 다시 실행하라"
   fi
   local_head=$(git -C "$GITOPS_REPO_DIR" rev-parse --short HEAD)
   ok "저장소 clean · HEAD=$local_head"
   if ! git -C "$GITOPS_REPO_DIR" diff --quiet HEAD "@{upstream}" 2>/dev/null; then
-    warn "로컬 HEAD 가 upstream 과 다르다 — ArgoCD 는 **원격**을 읽는다. push 했는지 확인하라"
+    warn "로컬 HEAD 가 upstream 과 다르다. ArgoCD 는 원격을 읽는다. push 했는지 확인하라"
   fi
 else
-  warn "GITOPS_REPO_DIR 이 git 저장소가 아니다 — 자기소멸 원칙을 기계로 확인할 수 없다"
+  warn "GITOPS_REPO_DIR 이 git 저장소가 아니다. 자기소멸 원칙을 기계로 확인할 수 없다"
 fi
 
 # 매니페스트 3종 존재 확인
@@ -173,7 +141,7 @@ for f in "$PROJECT_FILE" "$CLUSTER_FILE" "$ROOTAPP_FILE" "$VALUES_FILE"; do
 done
 ok "매니페스트 3종 + values 존재"
 
-# 클러스터 도달성 — private endpoint 라 workbench 밖에서는 여기서 막힌다
+# 클러스터 도달성. private endpoint라 workbench 밖에서는 여기서 막힌다.
 if (( ! DRY_RUN )); then
   kubectl cluster-info >/dev/null 2>&1 \
     || die "클러스터에 닿지 않는다. workbench 에서 실행 중인지, kubeconfig 가 맞는지 확인하라"
@@ -181,14 +149,12 @@ if (( ! DRY_RUN )); then
 fi
 
 if (( DRY_RUN )); then
-  warn "dry-run 모드 — 아무것도 바꾸지 않는다"
-  warn "검증하지 않는다 — ArgoCD CR 은 CRD 라 클라이언트 dry-run 이 discovery API 를 요구한다(오프라인 불가)"
+  warn "dry-run 모드. 아무것도 바꾸지 않는다"
+  warn "검증하지 않는다. ArgoCD CR 은 CRD 라 클라이언트 dry-run 이 discovery API 를 요구한다(오프라인 불가)"
   warn "진짜 검증은 실제 실행 때 서버 dry-run 이 한다. 여기서는 '무엇을 어디서 적용하는지'만 본다"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 0단계 — ArgoCD 설치 (저장소의 values 그대로)
-# ─────────────────────────────────────────────────────────────────────────────
+# 0단계: ArgoCD 설치(저장소의 values 그대로)
 if want 0; then
   step 0 "helm install argo-cd $ARGOCD_CHART_VERSION"
   run helm repo add argo https://argoproj.github.io/argo-helm >/dev/null
@@ -202,13 +168,11 @@ if want 0; then
   ok "helm release '$ARGOCD_RELEASE' 적용됨"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2단계 — GitHub App repository Secret
-#   ⚠️ 자기소멸 원칙의 유일한 예외 — private key 라 저장소에 커밋할 수 없다.
-#      따라서 이 Secret 만 GitOps 관리 밖에 남는다. root App 의 prune:false 가 이것을 지켜준다.
-# ─────────────────────────────────────────────────────────────────────────────
+# 2단계: GitHub App repository Secret
+# ⚠️ 자기소멸 원칙의 유일한 예외. private key라 저장소에 커밋할 수 없어 이 Secret만 GitOps 관리
+#    밖에 남는다. root App의 prune:false가 이것을 지켜준다.
 if want 2; then
-  step 2 "GitHub App repository Secret (GitOps 관리 밖 — 의도된 예외)"
+  step 2 "GitHub App repository Secret (GitOps 관리 밖, 의도된 예외)"
   if (( DRY_RUN )); then
     printf '     [dry-run] kubectl create secret argocd-repo-gitops (private key 주입)\n'
   else
@@ -225,54 +189,44 @@ if want 2; then
       | kubectl apply -f -
   fi
   ok "repository Secret 'argocd-repo-gitops' 적용됨"
-  warn "이 Secret 은 저장소에 없다 — 삭제되면 모든 sync 가 멈춘다. 복구 절차에 포함하라"
+  warn "이 Secret 은 저장소에 없다. 삭제되면 모든 sync 가 멈춘다. 복구 절차에 포함하라"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3·4·5단계 — 커밋본을 그대로 apply. 각 단계가 다음의 전제다.
-#   서버 dry-run 을 먼저 돌려 스키마·권한 문제를 apply 전에 드러낸다.
-# ─────────────────────────────────────────────────────────────────────────────
+# 3·4·5단계: 커밋본을 그대로 apply. 각 단계가 다음의 전제다. 서버 dry-run을 먼저 돌려
+# 스키마·권한 문제를 apply 전에 드러낸다.
 apply_manifest() {
   local n=$1 label=$2 file=$3
   step "$n" "$label"
   printf '     출처: %s\n' "${file#"$GITOPS_REPO_DIR"/}"
   if (( DRY_RUN )); then
-    # ⚠️ dry-run 에서는 **kubectl 을 아예 부르지 않는다.** VPC 밖에서 실행하면:
-    #      ① `--dry-run=client`        → `failed to download openapi ... i/o timeout`
-    #      ② `--dry-run=client --validate=false` → `unable to recognize ... /api i/o timeout`
-    #    ②가 핵심이다 — AppProject·Application 은 **CRD** 라 kubectl 이 RESTMapping 을 풀려면
-    #    discovery API(`/api`)를 쳐야 한다. 검증을 꺼도 그 호출은 남는다.
-    #    ⇒ **ArgoCD CR 은 클라이언트 dry-run 으로 오프라인 검증이 불가능하다.**
-    #    클러스터는 private 이므로 팀원 노트북에서는 늘 막힌다.
-    #    ⇒ dry-run 의 역할을 "검증"이 아니라 **"무엇을 어디서 적용하는지 보여주기"** 로 좁힌다.
-    #       진짜 검증은 실제 실행 경로의 `--dry-run=server` 가 한다(뒤로 미뤄질 뿐 사라지지 않는다).
+    # ⚠️ dry-run에서는 kubectl을 아예 부르지 않는다. AppProject·Application은 CRD라 kubectl이
+    #    RESTMapping을 풀려면 discovery API(/api)를 쳐야 하고, --validate=false로 검증을 꺼도 그
+    #    호출은 남는다. 클러스터는 private이므로 VPC 밖(팀원 노트북)에서는 i/o timeout으로 늘
+    #    막힌다. dry-run의 역할을 "검증"이 아니라 "무엇을 어디서 적용하는지 보여주기"로 좁히고,
+    #    진짜 검증은 실제 실행 경로의 --dry-run=server가 한다.
     printf '     %-14s %s\n' "kind/name:" \
       "$(awk '/^kind:/{k=$2} /^metadata:/{m=1} m&&/^  name:/{print k"/"$2; exit}' "$file")"
   else
-    # 서버 dry-run — 스키마·admission·권한을 실제로 통과하는지 apply 전에 본다.
+    # 서버 dry-run. 스키마·admission·권한을 실제로 통과하는지 apply 전에 본다.
     kubectl apply --dry-run=server -f "$file" >/dev/null \
-      || die "서버 dry-run 실패 — apply 하지 않았다: $file"
+      || die "서버 dry-run 실패. apply 하지 않았다: $file"
     kubectl apply -f "$file" | sed 's/^/     /'
   fi
   ok "$label 적용됨"
 }
 
-# ⚠️ `want 3 && apply_manifest ...` 로 쓰지 않는다.
-#    실측(bash 3.2/5.x): `set -e` 는 && 리스트의 앞 명령 실패를 면제하므로 **조기 종료는 없다.**
-#    문제는 다른 데 있다 — 그런 줄이 **마지막 문장이면 스크립트 종료 코드가 1** 이 된다.
-#    즉 `--to 4` 로 정상 실행한 seed 가 호출자(CI·wrapper)에게 **실패로 보인다.**
-#    if 블록은 건너뛰어도 0 이다.
+# ⛔ want 3 && apply_manifest ... 로 쓰지 않는다. set -e는 && 리스트의 앞 명령 실패를 면제하므로
+#    조기 종료는 없지만, 그런 줄이 마지막 문장이면 스크립트 종료 코드가 1이 된다. --to 4로 정상
+#    실행한 seed가 호출자(CI·wrapper)에게 실패로 보인다. if 블록은 건너뛰어도 0이다.
 if want 3; then apply_manifest 3 "platform AppProject" "$PROJECT_FILE"; fi
 if want 4; then apply_manifest 4 "cluster Secret"      "$CLUSTER_FILE"; fi
 if want 5; then apply_manifest 5 "root Application"    "$ROOTAPP_FILE"; fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 검증 — "적용됐다"와 "동작한다"는 다르다
-# ─────────────────────────────────────────────────────────────────────────────
+# 검증. "적용됐다"와 "동작한다"는 다르다.
 if (( ! DRY_RUN )) && want 5; then
   step "verify" "흡수 확인"
   cat <<VERIFY
-     아래를 사람이 확인한다(자동 판정하지 않는다 — 실패 모드가 여러 겹이다):
+     아래를 사람이 확인한다(자동 판정하지 않는다. 실패 모드가 여러 겹이다):
 
      1) root App 이 저장소를 실제로 읽었는가
         kubectl -n $ARGOCD_NAMESPACE get application root-app \\
@@ -298,25 +252,25 @@ if (( ! DRY_RUN )) && want 5; then
      ⛔ 마지막으로 **비밀번호를 바꾸고 초기 Secret 을 지운다**(선택이 아니라 완료 조건):
 
         export ARGOCD_OPTS='--port-forward --port-forward-namespace $ARGOCD_NAMESPACE --insecure'
-        argocd login --username admin                        # 프롬프트 — 에코 없음
+        argocd login --username admin                        # 프롬프트, 에코 없음
         argocd account update-password 2>/tmp/argocd-pw.err   # 현재 → 신규 → 확인
         kubectl -n $ARGOCD_NAMESPACE delete secret argocd-initial-admin-secret
 
-        🔴 ARGOCD_OPTS='--core' 로는 update-password 가 실패한다:
+        ⛔ ARGOCD_OPTS='--core' 로는 update-password 가 실패한다:
              "failed to get issue time: unable to extract token claims"
            --core 는 argocd-server 를 **우회**해 kube-apiserver 로 직접 가므로 세션 토큰이 없다.
            신원이 필요한 작업(비밀번호·계정·토큰)은 --core 로 하지 않는다.
         ⚠️ --insecure 는 **클라이언트** 검증 생략이다(서버 TLS 를 끄는 server.insecure 와 다르다).
            port-forward 주소가 localhost:<random> 이라 인증서 CN 이 맞지 않기 때문이다.
         ⚠️ --port-forward 는 포워더를 CLI 프로세스 안에서 돌려 teardown 마다 broken pipe 가
-           stderr 로 나온다. **실패가 아니다** — 위처럼 2> 로 프롬프트(stdout)와 분리한다.
+           stderr 로 나온다. 실패가 아니다. 위처럼 2> 로 프롬프트(stdout)와 분리한다.
         ⚠️ 새 비밀번호는 ^.{8,32}$ 를 만족해야 한다(argocd-cm.passwordPattern 미설정 시 기본값).
 
      5) 교체 판정 (자동으로 성공을 선언하지 않는다):
         kubectl -n $ARGOCD_NAMESPACE get secret argocd-secret \\
           -o jsonpath='{.data.admin\\.passwordMtime}' | base64 -d; echo   # 시각이 갱신됐는가
         kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret   # NotFound 여야 한다
-        ⭐ 교체 후에도 argocd Application 이 Synced 로 남는다 — 차트가 argocd-secret 을
+        교체 후에도 argocd Application 이 Synced 로 남는다. 차트가 argocd-secret 을
            data 없이 렌더하므로 admin.password 는 ArgoCD 소유 필드가 아니다.
 VERIFY
 fi
