@@ -18,6 +18,7 @@
 - [부트스트랩 — 자기소멸(self-superseding) 원칙](#부트스트랩--자기소멸self-superseding-원칙)
 - [`bootstrap/argocd-seed.sh` — 이 저장소가 소유한다](#bootstrapargocd-seedsh--이-저장소가-소유한다)
 - [root App 스캔에서 파일을 빼는 방법 — 마커, `exclude` 아님](#root-app-스캔에서-파일을-빼는-방법--마커-exclude-아님)
+- [로컬 게이트 — 이 저장소의 유일한 강제 지점](#로컬-게이트--이-저장소의-유일한-강제-지점)
 - [알아야 할 규약](#알아야-할-규약)
   - [addon 네임스페이스 규칙](#addon-네임스페이스-규칙)
 - [현재 배포된 addon](#현재-배포된-addon)
@@ -64,6 +65,8 @@ addons/baseline/             # 전 클러스터 팬아웃 ApplicationSet(environ
 addons/catalog/              # opt-in 카탈로그 — 구독한 클러스터만(addon-<name> 라벨)
 addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root App 스캔에서 제외됨
 addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPolicy. 로컬 helm 차트, root App 스캔에서 제외됨
+scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬 게이트" 절)
+.githooks/                   # pre-commit 훅
 ```
 
 **확장 규칙(O(1))**: 새 클러스터는 `clusters/<env>/<cluster>/` 1개만 추가하면 cluster generator가
@@ -155,6 +158,41 @@ grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --inc
 그래서 `exclude`에도, 마커에도 넣지 않는다.
 
 ---
+
+## 로컬 게이트 — 이 저장소의 유일한 강제 지점
+
+이 저장소에는 CI가 없다. ArgoCD가 `main`을 pull로 reconcile할 뿐이라 **커밋 전 훅이 아니면
+아무것도 막지 못한다.** clone마다 한 번 켠다.
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit`이 staged 파일 중 `addons/`·`projects/`·`clusters/`·`bootstrap/`의
+`.yaml`/`.sh`, 저장소 `.md`, `scripts/*.py`, `.githooks/*`를 골라
+`scripts/validate-comment-conventions.py`에 넘긴다. 검사기는 주석에 **좌표**(날짜·문서 절
+번호·결정 식별자·세션 번호, 그리고 측정을 사건으로 적은 서술)가 있는지만 본다 — 언제 누가 왜
+바꿨는지는 `git blame`과 커밋 메시지가 답한다. 규칙 자체의 SSOT는 `iac-module-library`의
+`docs/conventions.md`와 `docs/writing-style.md`이고, 검사기는 규칙 텍스트를 다시 쓰지 않는다.
+정확한 패턴 목록은 검사기 자신이 갖는다.
+
+전체를 한 번에 돌리려면 저장소 루트에서:
+
+```bash
+python3 scripts/validate-comment-conventions.py
+```
+
+⚠️ 검사기와 훅이 `.py`와 확장자 없는 파일인 것은 우연이 아니다. `bootstrap/root-app.yaml`의
+root App이 `path: .` + `recurse: true`라 **저장소 어디에 두든 `.yaml`은 매니페스트로
+흡수된다** — 도구를 `.yaml`로 만들면 그 자체가 클러스터에 실린다.
+
+⛔ 매니페스트 렌더 결과는 검사하지 않는다. 그것은 ArgoCD가 sync 시점에 판정하고, 훅에서
+흉내 내면 두 판정이 갈린다.
+
+의도적 우회는 `git commit --no-verify`이고, 사유를 커밋 메시지에 남긴다.
+
+`aks-platform-gitops`가 같은 게이트를 같은 내용으로 갖는다. 한쪽을 고치면 다른 쪽도 함께
+고친다 — 드리프트를 검사하는 장치는 없다.
 
 ## 알아야 할 규약
 

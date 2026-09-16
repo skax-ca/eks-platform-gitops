@@ -10,6 +10,10 @@
 #  적용 범위: addons/** · projects/** · clusters/** · bootstrap/** 의 *.yaml, *.sh,
 #  저장소 *.md, scripts/*.py, .githooks/*.
 #
+#  ⛔ 검사 대상은 주석뿐이다. YAML 블록 스칼라(description: | 등) 안의 산문까지 넓히는 안은
+#     기각했다 — 그 자리에는 정책 메시지·차트 설명처럼 숫자와 날짜꼴 문자열이 정상적으로
+#     들어가고, 넓히면 오탐이 사람을 훅 우회로 몰아간다. 블록 스칼라의 좌표는 리뷰가 잡는다.
+#
 #  ⚠️ 이 저장소에 .yaml 을 새로 만들 때는 root App 을 함께 생각한다. bootstrap/argocd-app.yaml
 #     의 root App 이 `path: .` + `recurse: true` 라 저장소 어디에 두든 매니페스트로 흡수된다.
 #     이 스크립트와 훅이 .py 와 확장자 없는 파일인 것은 그래서다.
