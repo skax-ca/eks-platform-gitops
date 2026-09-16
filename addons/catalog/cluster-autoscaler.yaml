@@ -9,7 +9,7 @@
 #    Karpenter, 필수 addon·OSS(redis·postgresql·mongodb 등)는 managed_node_groups + CA"를
 #    쓰고 싶은 고객만 옵트인한다.
 #
-# 🔴 Terraform 전제(완비 — skax-ca/iac-module-library PR #25):
+# 🔴 Terraform 전제(모두 충족돼 있다. 없으면 이 addon 은 권한 없이 떠서 조용히 아무것도 못 한다):
 #    · Pod Identity role + least-privilege 정책(`enable_cluster_autoscaler = true`)
 #    · Pod Identity association **kube-system/cluster-autoscaler** (모듈이 고정, 아래 네임스페이스
 #      절 참조 — 가역적이지 않다, 바꾸려면 이 매니페스트와 Terraform 양쪽을 함께 고친다)
@@ -20,7 +20,7 @@
 #
 # ✅ **dev 클러스터는 이 addon 을 구독한다**(cluster Secret 라벨) —
 #    `managed_node_groups.system`에 `workload-class=system` taint 가 `eks-reference-infra`
-#    PR #32·#33 으로 이미 반영·검증됐다. taint 분리 없이 CA 를 켜면 CA 가 `system`
+#    쪽에 이미 있다. taint 분리 없이 CA 를 켜면 CA 가 `system`
 #    노드그룹 전체를 auto-discover 해 Karpenter 와 같은 pending pod 를 두고 경쟁할 수 있었는데
 #    (근거: `aws/karpenter-provider-aws#2543`), 아래 `nodeSelector`+`tolerations`가 그 경쟁을
 #    차단한다.
