@@ -21,4 +21,21 @@ echo "[pre-commit] 주석·문체 규칙 검사"
 # shellcheck disable=SC2086
 python3 scripts/validate-comment-conventions.py $targets
 
+# 셸 게이트. bash -n 은 문법만 보고, shellcheck 는 인용·확장·종료코드 실수를 본다.
+# argocd-seed.sh 는 workbench 에서 사람이 손으로 돌리는 스크립트라 깨진 채 머지되면
+# 부트스트랩 한가운데서 드러난다. -x 는 source 추적이고, 이 저장소에는 source 가 없지만
+# 형제 저장소 훅과 같은 호출을 유지한다.
+sh_staged=$(printf '%s\n' "$changed" | grep -E '\.sh$' || true)
+if [ -n "$sh_staged" ]; then
+  echo "[pre-commit] 셸 변경 감지. 문법·정적 검사"
+  command -v shellcheck >/dev/null || {
+    echo "  ✗ shellcheck 가 없다: brew install shellcheck (clone마다 1회)" >&2
+    exit 1
+  }
+  for f in $sh_staged; do
+    bash -n "$f"
+    shellcheck -x "$f"
+  done
+fi
+
 echo "[pre-commit] 게이트 통과 ✓"

@@ -166,6 +166,7 @@ grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --inc
 
 ```bash
 git config core.hooksPath .githooks
+brew install shellcheck        # 셸 게이트가 요구한다. 없으면 훅이 즉시 실패한다
 ```
 
 `.githooks/pre-commit`이 staged 파일 중 `addons/`·`projects/`·`clusters/`·`bootstrap/`의
@@ -185,6 +186,10 @@ python3 scripts/validate-comment-conventions.py
 ⚠️ 검사기와 훅이 `.py`와 확장자 없는 파일인 것은 우연이 아니다. `bootstrap/root-app.yaml`의
 root App이 `path: .` + `recurse: true`라 **저장소 어디에 두든 `.yaml`은 매니페스트로
 흡수된다** — 도구를 `.yaml`로 만들면 그 자체가 클러스터에 실린다.
+
+staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종료코드)가 함께 돈다.
+`bootstrap/argocd-seed.sh`는 workbench에서 사람이 손으로 돌리는 스크립트라, 깨진 채 머지되면
+부트스트랩 한가운데서 드러난다.
 
 ⛔ 매니페스트 렌더 결과는 검사하지 않는다. 그것은 ArgoCD가 sync 시점에 판정하고, 훅에서
 흉내 내면 두 판정이 갈린다.
