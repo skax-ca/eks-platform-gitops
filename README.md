@@ -136,8 +136,7 @@ ApplicationSet이, `values.yaml`은 multi-source가 따로 읽는다), `bootstra
 
 ## helm values — `addons/<addon>/values.yaml`
 
-업스트림 차트에 넘기는 값은 두 종류이고 자리가 다르다. 저장소가 이미 아는 값(tolerations ·
-serviceAccount · replicas)은 `addons/<addon>/values.yaml`에 두고, ApplicationSet이 multi-source의
+저장소가 이미 아는 값(tolerations · serviceAccount · replicas)은 `addons/<addon>/values.yaml`에 두고, ApplicationSet이 multi-source의
 `$values/addons/<addon>/values.yaml`로 읽는다. 팬아웃 시점에만 정해지는 값(`{{name}}` · cluster
 Secret 라벨)은 ApplicationSet의 `helm.parameters`에 남는다 — fasttemplate이 파일 안에서는 동작하지
 않기 때문이다.
