@@ -1,0 +1,29 @@
+# KEDA 차트 values — keda ApplicationSet 이 읽는다
+#
+# 팬아웃 시점에 정해지는 값은 없다. 스케줄링 제약 둘만 넘기고 나머지는 차트 기본값이다.
+# 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
+
+# system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations) —
+#    cluster-autoscaler·coredns·metrics-server 와 동일 패턴(eks-reference-infra main.tf 의
+#    workload_class_toleration local). 차트 최상위 nodeSelector/tolerations 는
+#    operator·metricsServer·webhooks 3개 컴포넌트 전부에 공통 적용된다.
+#
+#    차트 기본값(스케줄링 제약 없음) 그대로 두면 KEDA 3개 파드가 system taint 를 못 넘어
+#    Karpenter 가 만든 spot 노드로 밀려난다. keda-admission-webhooks 는 cert-manager-webhook 과
+#    같은 admission webhook 계열인데, 다른 컨트롤러(argocd·cert-manager·kyverno·aws-lbc·
+#    cluster-autoscaler·karpenter 자신)는 전부 system 고정이라 이것만 spot 에 두면 어긋난다 —
+#    spot 노드 회수 시 operator·webhook 이 동시에 죽어 오토스케일링 정지 + ScaledObject/ScaledJob
+#    CRUD 차단으로 이어진다.
+nodeSelector:
+  workload-class: system
+tolerations:
+  - key: workload-class
+    operator: Equal
+    value: system
+    effect: NoSchedule
+
+# 기본값을 유지하는 것 — 판단의 기록:
+#  · operator·metrics-apiserver·admission-webhooks 각 replicas: 1. podAntiAffinity 없음.
+#    dev 2노드에 무리 없다.
+#  · ⛔ AWS 스케일러용 podIdentity 설정을 켜지 않는다 — Pod Identity association 이 없다
+#    (addons/catalog/keda.yaml 헤더). in-cluster 트리거(cron·prometheus·kafka)만 쓴다.

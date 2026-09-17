@@ -96,50 +96,31 @@ spec:
         argocd.argoproj.io/compare-options: ServerSideDiff=true
     spec:
       project: platform
-      source:
-        repoURL: https://kyverno.github.io/kyverno/
-        chart: kyverno
-        # 🔴 **3.8 라인에 머무는 이유**(상류 최신은 3.9 다): 3.9.0 부터 ②kyverno-policies 의
-        #    `policyType` 기본값이 `ClusterPolicy` 에서 `ValidatingPolicy`(policies.kyverno.io,
-        #    CEL 기반)로 바뀐다. 차트 values.yaml 에서 확인했다.
-        #    ⇒ 라인을 넘기면 ②가 렌더하는 **kind 자체가 달라진다.** AppProject 의
-        #      clusterResourceWhitelist 에는 `kyverno.io/ClusterPolicy` 만 열려 있고
-        #      (projects/platform.yaml), ③(우리 커스텀 정책)도 ClusterPolicy 다.
-        #    ⇒ 3.9 로 올릴 때는 ②에 `policyType=ClusterPolicy` 를 명시해 현행 kind 를 유지하거나,
-        #      whitelist 와 ③를 함께 옮긴다. **둘 중 무엇을 할지는 승격 전에 답한다.**
-        #    ⚠️ 버전 제약이 아니다. 3.8·3.9 둘 다 kubeVersion `>=1.25.0-0` 이고 클러스터 1.35.6 은
-        #       양쪽을 충족한다.
-        # kyverno-policies 와 **같은 마이너 라인**을 유지한다. 이 라인(3.8)은 양쪽에 같은 번호가 있다.
-        targetRevision: 3.8.2
-        # ⚠️ tolerations 하나만 예외로 넘긴다 — "기본값을 그대로 받는다"는 결정은 유지하되
-        #    (기능적 기본값은 안 건드린다), 이건 기능이 아니라 **스케줄 전제**다.
-        #    system 관리형 노드그룹의 workload-class=system NoSchedule taint 때문에
-        #    컨트롤러 4종이 전부 Pending 이 된다. 차트 확인
-        #    (helm show values kyverno/kyverno 3.8.2)으로 top-level global.tolerations 확인,
-        #    렌더(helm template --set-json)로 컨트롤러 4종 전부에 전파됨을 확인.
-        helm:
-          values: |
-            global:
-              tolerations:
-                - key: workload-class
-                  operator: Equal
-                  value: system
-                  effect: NoSchedule
-        #
-        # ⛔ 나머지 helm values 를 넘기지 않는다 — 차트 기본값을 그대로 받는 것이 이 증분의 결정이다.
-        #    (기본값과 다른 것만 적는다. 아래 "기본값을 유지하는 것" 참조)
-        #
-        # 기본값을 유지하는 것 — 판단의 기록:
-        #  · 컨트롤러 4종(admission·background·cleanup·reports) replicas 미지정 = 1.
-        #    dev 2노드에 충분하다. ⚠️ podAntiAffinity 가 걸려 있으므로 **HA 로 올릴 때 노드 수를 함께 본다.**
-        #  · config.webhooks.namespaceSelector 가 kube-system·kyverno 를 **이미 제외**한다(ConfigMap 확인)
-        #    ⇒ ALBC·Karpenter 는 Kyverno 웹훅 경로에 **아예 들어가지 않는다.**
-        #       네임스페이스 예외 2개(kube-system)가 무관한 방향에서 값을 돌려줬다.
-        #    🔴 그러나 **argocd 는 제외 대상이 아니다.** 지금(Audit + failurePolicy Ignore)은 무해하지만
-        #       Enforce 로 전환하면 **순환 의존**이 된다 — Kyverno 장애 → ArgoCD 막힘 → Kyverno 를
-        #       고칠 수단 상실. ⇒ Enforce 전환은 그 질문을 **먼저** 답한다.
-        #       ⛔ 지금 미리 넣지 않는다 — 현재 조합에서 아무 일도 하지 않는 **죽은 설정**이 된다.
-        #  · config.resourceFilters 도 kube-system·kube-public·kube-node-lease·kyverno 를 제외한다.
+      sources:
+        - repoURL: https://kyverno.github.io/kyverno/
+          chart: kyverno
+          # 🔴 **3.8 라인에 머무는 이유**(상류 최신은 3.9 다): 3.9.0 부터 ②kyverno-policies 의
+          #    `policyType` 기본값이 `ClusterPolicy` 에서 `ValidatingPolicy`(policies.kyverno.io,
+          #    CEL 기반)로 바뀐다. 차트 values.yaml 에서 확인했다.
+          #    ⇒ 라인을 넘기면 ②가 렌더하는 **kind 자체가 달라진다.** AppProject 의
+          #      clusterResourceWhitelist 에는 `kyverno.io/ClusterPolicy` 만 열려 있고
+          #      (projects/platform.yaml), ③(우리 커스텀 정책)도 ClusterPolicy 다.
+          #    ⇒ 3.9 로 올릴 때는 ②에 `policyType=ClusterPolicy` 를 명시해 현행 kind 를 유지하거나,
+          #      whitelist 와 ③를 함께 옮긴다. **둘 중 무엇을 할지는 승격 전에 답한다.**
+          #    ⚠️ 버전 제약이 아니다. 3.8·3.9 둘 다 kubeVersion `>=1.25.0-0` 이고 클러스터 1.35.6 은
+          #       양쪽을 충족한다.
+          # kyverno-policies 와 **같은 마이너 라인**을 유지한다. 이 라인(3.8)은 양쪽에 같은 번호가 있다.
+          targetRevision: 3.8.2
+          helm:
+            # 차트 기본값을 그대로 받고 스케줄 전제 하나만 넘긴다. 무엇을 넘기고 무엇을 기본값으로
+            # 두는지는 values 파일이 갖는다. prd·nonprd 두 블록이 같은 파일을 읽어 갈릴 수 없다.
+            # $values 는 아래 `ref: values` source 의 저장소 루트다.
+            valueFiles:
+              - $values/addons/kyverno/values.yaml
+        # 값 참조 전용 source — `ref` 만 있고 path/chart 가 없으므로 렌더 대상이 아니다.
+        - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         server: '{{server}}'
         namespace: kyverno
@@ -187,19 +168,17 @@ spec:
         argocd.argoproj.io/compare-options: ServerSideDiff=true
     spec:
       project: platform
-      source:
-        repoURL: https://kyverno.github.io/kyverno/
-        chart: kyverno
-        # 승격 대기 중에는 이 값이 prd 보다 앞선다. ②-nonprd 와 **같은 마이너 라인**을 유지한다.
-        targetRevision: 3.8.2
-        helm:
-          values: |
-            global:
-              tolerations:
-                - key: workload-class
-                  operator: Equal
-                  value: system
-                  effect: NoSchedule
+      sources:
+        - repoURL: https://kyverno.github.io/kyverno/
+          chart: kyverno
+          # 승격 대기 중에는 이 값이 prd 보다 앞선다. ②-nonprd 와 **같은 마이너 라인**을 유지한다.
+          targetRevision: 3.8.2
+          helm:
+            valueFiles:
+              - $values/addons/kyverno/values.yaml
+        - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         server: '{{server}}'
         namespace: kyverno

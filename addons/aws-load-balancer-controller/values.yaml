@@ -1,0 +1,25 @@
+# AWS Load Balancer Controller 차트 values — aws-load-balancer-controller-prd·-nonprd 두 ApplicationSet 이
+#    같은 파일을 읽는다
+#
+# 팬아웃 시점에 정해지는 값(clusterName·vpcTags.Name)은 여기 없다.
+#    addons/baseline/aws-load-balancer-controller.yaml 의 helm.parameters 가 넘긴다.
+# 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
+
+# system 관리형 노드그룹의 workload-class=system NoSchedule taint 를 넘는다.
+#    Karpenter 가 아직 없는 부트스트랩 시점에는 system 2노드가 유일한 스케줄 대상이다.
+#    차트의 top-level 키다(argo-cd 차트의 global.tolerations 와 달리 여기는 이 이름 그대로다).
+tolerations:
+  - key: workload-class
+    operator: Equal
+    value: system
+    effect: NoSchedule
+# Pod Identity 바인딩 대상. IRSA 애노테이션은 불필요하다 — association 이 이미 있다.
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+# cluster-scoped IngressClass 를 만들지 않는다 — AppProject whitelist 를 최소로 유지한다.
+# 필요해지면 그때 whitelist 에 networking.k8s.io/IngressClass 를 추가하고 켠다.
+createIngressClassResource: false
+# 동일 리전 공유값이라 여기 둔다. cross-region 스포크를 도입하면 cluster Secret 의 region
+# 라벨로 승격해 helm.parameters 로 옮긴다.
+region: ap-northeast-2

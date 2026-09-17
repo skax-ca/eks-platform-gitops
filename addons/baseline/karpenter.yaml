@@ -81,49 +81,41 @@ spec:
         argocd.argoproj.io/sync-wave: "0"
     spec:
       project: platform
-      source:
+      sources:
         # ⚠️ OCI registry 다. ALBC 의 HTTP helm repo 와 **다른 호스트**라 egress 를 따로 확인했다
         #    (canary: revision 1.14.0 해석 + rendered 18, conditions 없음).
         #    Repository Secret 도 enableOCI 설정도 **필요 없다** — scheme 없는 repoURL 만으로 pull 된다.
-        repoURL: public.ecr.aws/karpenter
-        chart: karpenter
-        # 핀 근거: ECR Public 태그 전수(2,317개, Link 헤더 페이지네이션) 중 최신.
-        # 근거: 호환성 매트릭스 원문 `1.35 → >= 1.9` (1.36 → >= 1.13 이라 다음 업그레이드도 충족).
-        # 🔑 OCI 태그가 곧 chart 버전이다 — GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
-        targetRevision: 1.14.0
-        helm:
-          # Application 이름({{name}}-karpenter)과 release 이름을 분리한다 — 근거는
-          # aws-load-balancer-controller.yaml과 같다.
-          releaseName: karpenter
-          parameters:
-            # 이 값이 없으면 helm template 이 실패한다:
-            #   "Chart cannot be installed without a valid settings.clusterName!"
-            # ⚠️ 그 실패는 rendered 0 + ComparisonError 로 나타나 **egress 실패와 똑같이 보인다.**
-            #    구분 신호는 revision 해석 여부다 — 해석되면 egress는 정상이고 값 문제다.
-            - name: settings.clusterName
-              value: '{{name}}'
-            # Terraform 서브모듈이 SQS 를 `Karpenter-<cluster>` 로 명명한다 ⇒ 클러스터명에서 **파생**된다.
-            # 라벨을 새로 만들지 않는 이유가 이것이다.
-            - name: settings.interruptionQueue
-              value: 'Karpenter-{{name}}'
-          values: |
-            # system 관리형 노드그룹의 workload-class=system NoSchedule taint를 넘는다.
-            #   ⚠️ hub 실제 seed에서 발견 — **Karpenter 자신이 부트스트랩 문제다**:
-            #      Karpenter 가 없으면 non-system 노드가 생기지 않고, 그 노드가 없으면 이
-            #      2노드(system)가 유일한 스케줄 대상이라 Karpenter 도 여기서 시작해야 한다.
-            #      차트 확인(helm show values oci://public.ecr.aws/karpenter/karpenter 1.14.0)으로
-            #      top-level tolerations 키 확인.
-            tolerations:
-              - key: workload-class
-                operator: Equal
-                value: system
-                effect: NoSchedule
-            # Pod Identity 바인딩 대상(kube-system/karpenter). IRSA 애노테이션 불필요.
-            serviceAccount:
-              create: true
-              name: karpenter
-            # leader election HA. ⚠️ 노드 2개짜리 dev 라 그 이상은 의미가 없다.
-            replicas: 2
+        - repoURL: public.ecr.aws/karpenter
+          chart: karpenter
+          # 핀 근거: ECR Public 태그 전수(2,317개, Link 헤더 페이지네이션) 중 최신.
+          # 근거: 호환성 매트릭스 원문 `1.35 → >= 1.9` (1.36 → >= 1.13 이라 다음 업그레이드도 충족).
+          # 🔑 OCI 태그가 곧 chart 버전이다 — GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
+          targetRevision: 1.14.0
+          helm:
+            # Application 이름({{name}}-karpenter)과 release 이름을 분리한다 — 근거는
+            # aws-load-balancer-controller.yaml과 같다.
+            releaseName: karpenter
+            # 팬아웃 시점에만 정해지는 값은 여기 남는다. fasttemplate 은 Application spec 에만
+            # 적용되고 git 경로 안의 파일에는 적용되지 않는다.
+            parameters:
+              # 이 값이 없으면 helm template 이 실패한다:
+              #   "Chart cannot be installed without a valid settings.clusterName!"
+              # ⚠️ 그 실패는 rendered 0 + ComparisonError 로 나타나 **egress 실패와 똑같이 보인다.**
+              #    구분 신호는 revision 해석 여부다 — 해석되면 egress는 정상이고 값 문제다.
+              - name: settings.clusterName
+                value: '{{name}}'
+              # Terraform 서브모듈이 SQS 를 `Karpenter-<cluster>` 로 명명한다 ⇒ 클러스터명에서 **파생**된다.
+              # 라벨을 새로 만들지 않는 이유가 이것이다.
+              - name: settings.interruptionQueue
+                value: 'Karpenter-{{name}}'
+            # 저장소가 아는 값은 파일로 — prd·nonprd 두 블록이 같은 파일을 읽어 갈릴 수 없다.
+            # $values 는 아래 `ref: values` source 의 저장소 루트다.
+            valueFiles:
+              - $values/addons/karpenter/values.yaml
+        # 값 참조 전용 source — `ref` 만 있고 path/chart 가 없으므로 렌더 대상이 아니다.
+        - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         server: '{{server}}'
         # 네임스페이스 예외 — APF FlowSchema. 근거 전문은 위 헤더.
@@ -153,9 +145,10 @@ spec:
 #    git 이력의 마지막 cluster-secret을 그대로 되살리면 라벨이 빠진 채 등록된다.
 #    ⇒ 그 상태로는 Application이 **하나도** 생기지 않는다(조용히 실패한다).
 #
-# ⛔ **두 블록을 함께 고친다.** helm 값·네임스페이스·APF 근거 주석은 위 ① 블록이 소유하고
-#    여기서는 중복하지 않는다. 한쪽만 고치면 승격했을 때 설정이 조용히 달라진다. 값이 갈려야
-#    하는 것은 `targetRevision` 하나뿐이다.
+# ⛔ **두 블록을 함께 고친다.** 값이 갈려야 하는 것은 `targetRevision` 하나뿐이다. helm values 는
+#    addons/karpenter/values.yaml 하나를 양 블록이 읽으므로 갈릴 수 없고, 갈릴 수 있는 것은
+#    parameters·네임스페이스·syncPolicy 다. 네임스페이스·APF 근거 주석은 위 ① 블록이 소유하고
+#    여기서는 중복하지 않는다.
 # ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -177,28 +170,23 @@ spec:
         argocd.argoproj.io/sync-wave: "0"
     spec:
       project: platform
-      source:
-        repoURL: public.ecr.aws/karpenter
-        chart: karpenter
-        # 승격 대기 중에는 이 값이 prd보다 앞선다. 검증이 끝나면 prd를 같은 값으로 올린다.
-        targetRevision: 1.14.0
-        helm:
-          releaseName: karpenter
-          parameters:
-            - name: settings.clusterName
-              value: '{{name}}'
-            - name: settings.interruptionQueue
-              value: 'Karpenter-{{name}}'
-          values: |
-            tolerations:
-              - key: workload-class
-                operator: Equal
-                value: system
-                effect: NoSchedule
-            serviceAccount:
-              create: true
-              name: karpenter
-            replicas: 2
+      sources:
+        - repoURL: public.ecr.aws/karpenter
+          chart: karpenter
+          # 승격 대기 중에는 이 값이 prd보다 앞선다. 검증이 끝나면 prd를 같은 값으로 올린다.
+          targetRevision: 1.14.0
+          helm:
+            releaseName: karpenter
+            parameters:
+              - name: settings.clusterName
+                value: '{{name}}'
+              - name: settings.interruptionQueue
+                value: 'Karpenter-{{name}}'
+            valueFiles:
+              - $values/addons/karpenter/values.yaml
+        - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         server: '{{server}}'
         namespace: kube-system

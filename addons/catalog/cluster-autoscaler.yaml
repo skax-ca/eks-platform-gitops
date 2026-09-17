@@ -71,59 +71,35 @@ spec:
         - resources-finalizer.argocd.argoproj.io
     spec:
       project: platform
-      source:
-        repoURL: https://kubernetes.github.io/autoscaler
-        chart: cluster-autoscaler
-        targetRevision: 9.59.0
-        helm:
-          # Application 이름({{name}}-cluster-autoscaler)과 release 이름을 분리한다 —
-          # 접두사가 붙은 이름은 DNS-1123 63자 제한에 걸려 잘리고, 잘린 이름끼리 충돌한다.
-          releaseName: cluster-autoscaler
-          parameters:
-            # autoDiscovery.tags 기본값이 이미
-            #   k8s.io/cluster-autoscaler/enabled · k8s.io/cluster-autoscaler/{{clusterName}}
-            # 이고, 이 두 태그는 AWS 가 managed node group 생성 시 ASG 에 자동으로 붙인다 —
-            # 그래서 autoDiscovery.clusterName 하나만 주면 된다(values 오버라이드 불필요).
-            - name: autoDiscovery.clusterName
-              value: '{{name}}'
-            - name: awsRegion
-              value: ap-northeast-2
-            - name: cloudProvider
-              value: aws
-          values: |
-            # Pod Identity 바인딩 대상(kube-system/cluster-autoscaler). IRSA 애노테이션 불필요.
-            # ⚠️ 이 chart 는 ALBC·Karpenter 와 달리 serviceAccount 가 최상위가 아니라 rbac 아래다
-            #    (`helm show values` 로 확인). 그대로 복사하면 조용히 무시된다.
-            rbac:
-              serviceAccount:
-                create: true
-                name: cluster-autoscaler
-
-            # 자기 자신이 관리하는(=Karpenter 가 만든) 노드에는 못 뜨게 막는다. Karpenter 차트는
-            # 이 보호가 기본값으로 내장돼 있지만(`karpenter.sh/nodepool DoesNotExist`,
-            # eks-reference-infra 의 system 노드그룹 주석 참조) CA 차트는 affinity 기본값이
-            # 비어 있다. 그래서 이 매니페스트가 명시로 채운다.
-            affinity:
-              nodeAffinity:
-                requiredDuringSchedulingIgnoredDuringExecution:
-                  nodeSelectorTerms:
-                    - matchExpressions:
-                        - key: karpenter.sh/nodepool
-                          operator: DoesNotExist
-
-            # system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations) —
-            # eks-reference-infra `docs/runbooks.md`의 「Karpenter + Cluster Autoscaler 동시
-            # 운영: taint 전략」절과 같은 형태(coredns·metrics-server 와 동일 패턴). 위 negative
-            # affinity 는 "Karpenter 노드는 안 됨"만 막고 "system 노드로 가라"는 강제하지
-            # 않으므로 nodeSelector 가 따로 필요하다. 차트 기본값은 둘 다 비어 있다
-            # (`helm show values` 로 확인).
-            nodeSelector:
-              workload-class: system
-            tolerations:
-              - key: workload-class
-                operator: Equal
-                value: system
-                effect: NoSchedule
+      sources:
+        - repoURL: https://kubernetes.github.io/autoscaler
+          chart: cluster-autoscaler
+          targetRevision: 9.59.0
+          helm:
+            # Application 이름({{name}}-cluster-autoscaler)과 release 이름을 분리한다 —
+            # 접두사가 붙은 이름은 DNS-1123 63자 제한에 걸려 잘리고, 잘린 이름끼리 충돌한다.
+            releaseName: cluster-autoscaler
+            # 팬아웃 시점에만 정해지는 값은 여기 남는다. fasttemplate 은 Application spec 에만
+            # 적용되고 git 경로 안의 파일에는 적용되지 않는다.
+            parameters:
+              # autoDiscovery.tags 기본값이 이미
+              #   k8s.io/cluster-autoscaler/enabled · k8s.io/cluster-autoscaler/{{clusterName}}
+              # 이고, 이 두 태그는 AWS 가 managed node group 생성 시 ASG 에 자동으로 붙인다 —
+              # 그래서 autoDiscovery.clusterName 하나만 주면 된다(values 오버라이드 불필요).
+              - name: autoDiscovery.clusterName
+                value: '{{name}}'
+              - name: awsRegion
+                value: ap-northeast-2
+              - name: cloudProvider
+                value: aws
+            # 저장소가 아는 값(SA·affinity·스케줄링)은 파일로. $values 는 아래 `ref: values`
+            # source 의 저장소 루트다.
+            valueFiles:
+              - $values/addons/cluster-autoscaler/values.yaml
+        # 값 참조 전용 source — `ref` 만 있고 path/chart 가 없으므로 렌더 대상이 아니다.
+        - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         server: '{{server}}'
         namespace: kube-system

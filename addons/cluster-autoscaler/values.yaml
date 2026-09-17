@@ -1,0 +1,37 @@
+# Cluster Autoscaler 차트 values — cluster-autoscaler ApplicationSet 이 읽는다
+#
+# 팬아웃 시점에 정해지는 값(autoDiscovery.clusterName)은 여기 없다.
+#    addons/catalog/cluster-autoscaler.yaml 의 helm.parameters 가 넘긴다.
+# 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
+
+# Pod Identity 바인딩 대상(kube-system/cluster-autoscaler). IRSA 애노테이션 불필요.
+# ⚠️ 이 chart 는 ALBC·Karpenter 와 달리 serviceAccount 가 최상위가 아니라 rbac 아래다.
+#    그대로 복사하면 조용히 무시된다.
+rbac:
+  serviceAccount:
+    create: true
+    name: cluster-autoscaler
+
+# 자기 자신이 관리하는(=Karpenter 가 만든) 노드에는 못 뜨게 막는다. Karpenter 차트는 이 보호가
+# 기본값으로 내장돼 있지만(`karpenter.sh/nodepool DoesNotExist`, eks-reference-infra 의 system
+# 노드그룹 주석 참조) CA 차트는 affinity 기본값이 비어 있다. 그래서 이 파일이 명시로 채운다.
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: karpenter.sh/nodepool
+              operator: DoesNotExist
+
+# system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations) —
+# eks-reference-infra `docs/runbooks.md`의 「Karpenter + Cluster Autoscaler 동시 운영: taint
+# 전략」절과 같은 형태(coredns·metrics-server 와 동일 패턴). 위 negative affinity 는 "Karpenter
+# 노드는 안 됨"만 막고 "system 노드로 가라"는 강제하지 않으므로 nodeSelector 가 따로 필요하다.
+# 차트 기본값은 둘 다 비어 있다.
+nodeSelector:
+  workload-class: system
+tolerations:
+  - key: workload-class
+    operator: Equal
+    value: system
+    effect: NoSchedule

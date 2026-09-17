@@ -1,0 +1,21 @@
+# Karpenter 컨트롤러 차트 values — karpenter-prd·karpenter-nonprd 두 ApplicationSet 이 같은 파일을 읽는다
+#
+# 팬아웃 시점에 정해지는 값(settings.clusterName·settings.interruptionQueue)은 여기 없다.
+#    addons/baseline/karpenter.yaml 의 helm.parameters 가 넘긴다.
+# 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
+
+# system 관리형 노드그룹의 workload-class=system NoSchedule taint 를 넘는다.
+#    Karpenter 자신이 부트스트랩 문제다: Karpenter 가 없으면 non-system 노드가 생기지 않고, 그
+#    노드가 없으면 system 2노드가 유일한 스케줄 대상이라 Karpenter 도 여기서 시작해야 한다.
+#    차트의 top-level 키다(helm show values oci://public.ecr.aws/karpenter/karpenter).
+tolerations:
+  - key: workload-class
+    operator: Equal
+    value: system
+    effect: NoSchedule
+# Pod Identity 바인딩 대상(kube-system/karpenter). IRSA 애노테이션 불필요.
+serviceAccount:
+  create: true
+  name: karpenter
+# leader election HA. ⚠️ 노드 2개짜리 dev 라 그 이상은 의미가 없다.
+replicas: 2

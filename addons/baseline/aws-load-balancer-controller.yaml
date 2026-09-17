@@ -67,61 +67,50 @@ spec:
         - resources-finalizer.argocd.argoproj.io
     spec:
       project: platform
-      source:
+      sources:
         # egress 확인 완료(canary): repo-server 가 이 호스트에 닿는다 —
         # revision 3.5.0 해석 + rendered 17, conditions 없음. ⇒ ECR 미러링 불필요.
-        repoURL: https://aws.github.io/eks-charts
-        chart: aws-load-balancer-controller
-        # 핀 근거: index.yaml 전수(80개) semver 정렬의 최신. chart 에 kubeVersion 제약 없음.
-        # ⚠️ 올릴 때는 canary 로 다시 확인한다 — 기존 핀 값을 여기 남기지 않는다(git이 이력을 갖는다).
-        targetRevision: 3.5.0
-        helm:
-          # Application 이름({{name}}-aws-lbc)과 release 이름을 분리한다 — release 이름이
-          # 없으면 그대로 리소스 이름에 전파돼 63자 제한에 걸릴 수 있다.
-          releaseName: aws-lbc
-          parameters:
-            # ALBC 필수 — 실제 EKS 클러스터명이어야 한다.
-            # 🔑 cluster Secret 의 이름이 곧 {{name}} 이다. 별칭을 쓰면 **조용히 틀린다**.
-            - name: clusterName
-              value: '{{name}}'
-            # ⚠️ 파드에서 IMDS 로 자동 탐지되지 않는다 — 노드 IMDSv2 hop limit=1 이라
-            #    ec2imds context deadline exceeded 로 CrashLoop 한다.
-            #    ⛔ hop limit 을 2로 올리는 우회는 기각됐다 — 그 노드의 모든 파드가 노드 IAM role 을
-            #       탈취 가능해져 Pod Identity 격리가 클러스터 전체에서 무너진다.
-            #       🔑 IMDS 를 못 쓰는 것은 결함이 아니라 **받아들이는 제약**이다.
-            #
-            # **vpcId 가 아니라 vpcTags 다.** chart 3.5.0 이 `--aws-vpc-tags` 를
-            #    지원하고, values 주석이 정확히 우리 경우를 서술한다 —
-            #    "This is alternative to vpcId. Set this when your pods are unable to use the
-            #     metadata service to determine VPC automatically."
-            #    AWS 발급 ID 는 재구축마다 바뀌지만 **Name 태그는 네이밍 규칙(SSOT)이 고정**한다.
-            #    실제로 재구축 뒤 vpcId 가 파기된 VPC 를 가리키고 있었던 적이 있고, 그 상태에서도
-            #    ArgoCD 는 Synced/Healthy 였다(helm 값이라 실패가 런타임으로 밀린다).
-            #    ⚠️ 태그를 여러 개 주면 **AND 필터**다. 규칙상 Name 하나로 유일성이 성립한다.
-            #    `--set vpcTags.Name=…` 는 `--aws-vpc-tags=Name=…` 로 렌더된다.
-            - name: vpcTags.Name
-              value: '{{metadata.labels.vpcName}}'
-          values: |
-            # system 관리형 노드그룹의 workload-class=system NoSchedule taint를 넘는다.
-            #   ⚠️ hub 실제 seed에서 발견 — Karpenter 가 아직 없는 부트스트랩
-            #      시점에는 이 2노드가 유일한 스케줄 대상이다. 차트 확인(helm show values
-            #      eks-charts/aws-load-balancer-controller 3.5.0)으로 top-level tolerations
-            #      키 확인(argo-cd 의 global.tolerations 와 달리 여기는 이 이름 그대로다).
-            tolerations:
-              - key: workload-class
-                operator: Equal
-                value: system
-                effect: NoSchedule
-            # Pod Identity 바인딩 대상. IRSA 애노테이션은 불필요하다 — association 이 이미 있다.
-            serviceAccount:
-              create: true
-              name: aws-load-balancer-controller
-            # cluster-scoped IngressClass 를 만들지 않는다 — AppProject whitelist 를 최소로 유지한다.
-            # 필요해지면 그때 whitelist 에 networking.k8s.io/IngressClass 를 추가하고 켠다.
-            createIngressClassResource: false
-            # 동일 리전 공유값이라 inline 이다. cross-region 스포크를 도입하면
-            # cluster Secret 의 region 라벨로 승격한다.
-            region: ap-northeast-2
+        - repoURL: https://aws.github.io/eks-charts
+          chart: aws-load-balancer-controller
+          # 핀 근거: index.yaml 전수(80개) semver 정렬의 최신. chart 에 kubeVersion 제약 없음.
+          # ⚠️ 올릴 때는 canary 로 다시 확인한다 — 기존 핀 값을 여기 남기지 않는다(git이 이력을 갖는다).
+          targetRevision: 3.5.0
+          helm:
+            # Application 이름({{name}}-aws-lbc)과 release 이름을 분리한다 — release 이름이
+            # 없으면 그대로 리소스 이름에 전파돼 63자 제한에 걸릴 수 있다.
+            releaseName: aws-lbc
+            # 팬아웃 시점에만 정해지는 값은 여기 남는다. fasttemplate 은 Application spec 에만
+            # 적용되고 git 경로 안의 파일에는 적용되지 않는다.
+            parameters:
+              # ALBC 필수 — 실제 EKS 클러스터명이어야 한다.
+              # 🔑 cluster Secret 의 이름이 곧 {{name}} 이다. 별칭을 쓰면 **조용히 틀린다**.
+              - name: clusterName
+                value: '{{name}}'
+              # ⚠️ 파드에서 IMDS 로 자동 탐지되지 않는다 — 노드 IMDSv2 hop limit=1 이라
+              #    ec2imds context deadline exceeded 로 CrashLoop 한다.
+              #    ⛔ hop limit 을 2로 올리는 우회는 기각됐다 — 그 노드의 모든 파드가 노드 IAM role 을
+              #       탈취 가능해져 Pod Identity 격리가 클러스터 전체에서 무너진다.
+              #       🔑 IMDS 를 못 쓰는 것은 결함이 아니라 **받아들이는 제약**이다.
+              #
+              # **vpcId 가 아니라 vpcTags 다.** chart 3.5.0 이 `--aws-vpc-tags` 를
+              #    지원하고, values 주석이 정확히 우리 경우를 서술한다 —
+              #    "This is alternative to vpcId. Set this when your pods are unable to use the
+              #     metadata service to determine VPC automatically."
+              #    AWS 발급 ID 는 재구축마다 바뀌지만 **Name 태그는 네이밍 규칙(SSOT)이 고정**한다.
+              #    실제로 재구축 뒤 vpcId 가 파기된 VPC 를 가리키고 있었던 적이 있고, 그 상태에서도
+              #    ArgoCD 는 Synced/Healthy 였다(helm 값이라 실패가 런타임으로 밀린다).
+              #    ⚠️ 태그를 여러 개 주면 **AND 필터**다. 규칙상 Name 하나로 유일성이 성립한다.
+              #    `--set vpcTags.Name=…` 는 `--aws-vpc-tags=Name=…` 로 렌더된다.
+              - name: vpcTags.Name
+                value: '{{metadata.labels.vpcName}}'
+            # 저장소가 아는 값은 파일로 — prd·nonprd 두 블록이 같은 파일을 읽어 갈릴 수 없다.
+            # $values 는 아래 `ref: values` source 의 저장소 루트다.
+            valueFiles:
+              - $values/addons/aws-load-balancer-controller/values.yaml
+        # 값 참조 전용 source — `ref` 만 있고 path/chart 가 없으므로 렌더 대상이 아니다.
+        - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         # self-managed ArgoCD 는 자신이 도는 클러스터를 이 URL 로 가리킨다.
         # ⚠️ 관리형 Capability 로 전환하면 EKS 클러스터 ARN 이다.
@@ -148,9 +137,10 @@ spec:
 #       teardown은 매칭 라벨을 먼저 떼어낸 뒤 삭제하는 절차라, git 이력의 마지막
 #       cluster-secret을 그대로 되살리면 라벨이 빠진 채 등록된다(조용히 실패한다).
 #
-# ⛔ **두 블록을 함께 고친다.** helm 값·파라미터의 근거 주석은 위 블록이 소유하고 여기서는
-#    중복하지 않는다. 한쪽만 고치면 승격했을 때 설정이 조용히 달라진다. 값이 갈려야 하는 것은
-#    `targetRevision` 하나뿐이다.
+# ⛔ **두 블록을 함께 고친다.** 값이 갈려야 하는 것은 `targetRevision` 하나뿐이다. helm values 는
+#    addons/aws-load-balancer-controller/values.yaml 하나를 양 블록이 읽으므로 갈릴 수 없고, 갈릴
+#    수 있는 것은 parameters·네임스페이스·syncPolicy 다. 파라미터의 근거 주석은 위 블록이 소유하고
+#    여기서는 중복하지 않는다.
 #    (matrix generator로 버전을 주입해 이 중복을 없애는 안은 기각돼 있다 — 근거는
 #     iac-module-library docs/architectures/gitops-hub-spoke/gitops.md 「하지 않는 것」)
 # ────────────────────────────────────────────────────────────────────────────
@@ -172,29 +162,23 @@ spec:
         - resources-finalizer.argocd.argoproj.io
     spec:
       project: platform
-      source:
-        repoURL: https://aws.github.io/eks-charts
-        chart: aws-load-balancer-controller
-        # 승격 대기 중에는 이 값이 prd보다 앞선다. 검증이 끝나면 prd를 같은 값으로 올린다.
-        targetRevision: 3.5.0
-        helm:
-          releaseName: aws-lbc
-          parameters:
-            - name: clusterName
-              value: '{{name}}'
-            - name: vpcTags.Name
-              value: '{{metadata.labels.vpcName}}'
-          values: |
-            tolerations:
-              - key: workload-class
-                operator: Equal
-                value: system
-                effect: NoSchedule
-            serviceAccount:
-              create: true
-              name: aws-load-balancer-controller
-            createIngressClassResource: false
-            region: ap-northeast-2
+      sources:
+        - repoURL: https://aws.github.io/eks-charts
+          chart: aws-load-balancer-controller
+          # 승격 대기 중에는 이 값이 prd보다 앞선다. 검증이 끝나면 prd를 같은 값으로 올린다.
+          targetRevision: 3.5.0
+          helm:
+            releaseName: aws-lbc
+            parameters:
+              - name: clusterName
+                value: '{{name}}'
+              - name: vpcTags.Name
+                value: '{{metadata.labels.vpcName}}'
+            valueFiles:
+              - $values/addons/aws-load-balancer-controller/values.yaml
+        - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         server: '{{server}}'
         namespace: kube-system

@@ -18,6 +18,7 @@
 - [부트스트랩 — 자기소멸(self-superseding) 원칙](#부트스트랩--자기소멸self-superseding-원칙)
 - [`bootstrap/argocd-seed.sh` — 이 저장소가 소유한다](#bootstrapargocd-seedsh--이-저장소가-소유한다)
 - [root App이 읽는 범위 — `include` allow-list](#root-app이-읽는-범위--include-allow-list)
+- [helm values — `addons/<addon>/values.yaml`](#helm-values--addonsaddonvaluesyaml)
 - [로컬 게이트 — 이 저장소의 유일한 강제 지점](#로컬-게이트--이-저장소의-유일한-강제-지점)
 - [알아야 할 규약](#알아야-할-규약)
   - [addon 네임스페이스 규칙](#addon-네임스페이스-규칙)
@@ -63,6 +64,7 @@ clusters/<env>/<cluster>/    # cluster Secret. 새 클러스터 = 디렉토리 1
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
 addons/baseline/             # 전 클러스터 팬아웃 ApplicationSet(environment 라벨)
 addons/catalog/              # opt-in 카탈로그 — 구독한 클러스터만(addon-<name> 라벨)
+addons/<addon>/values.yaml   # 업스트림 차트 helm values. 티어 쌍이 같은 파일을 읽는다(아래 "helm values" 절)
 addons/gateway/shared-gateway/  # GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
 addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트(per-cluster 값 주입)
 addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPolicy 매니페스트
@@ -114,8 +116,8 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬
 `bootstrap/root-app.yaml`은 `directory.include`에 적힌 경로만 매니페스트로 읽는다. 지금은
 `projects/`·`clusters/**/cluster-secret.yaml`·`addons/baseline/`·`addons/catalog/`·`bootstrap/`의
 두 Application 파일이다. **그 밖은 무엇이든 무시한다** — `addons/<addon>/<dir>/`의 로컬 차트와 CR
-매니페스트(전담 ApplicationSet이 따로 읽는다), helm values(`bootstrap/argocd-values.yaml`), 도구
-파일 전부.
+매니페스트(전담 ApplicationSet이 따로 읽는다), helm values(`addons/<addon>/values.yaml`·
+`bootstrap/argocd-values.yaml`), 도구 파일 전부.
 
 이 저장소는 `exclude`와 `+argocd:skip-file-rendering` 마커를 쓰지 않는다. 기각 근거는
 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」이 갖는다.
@@ -130,6 +132,23 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬
 정한다. ApplicationSet의 fasttemplate은 Application spec에만 적용되고 git 경로 안의 파일에는
 적용되지 않으므로, cluster generator의 값을 CR에 넣으려면 helm이 필요하다(`shared-gateway`·
 `karpenter/nodepool`). 주입할 값이 없으면 평문이다(`kyverno/custom-policies`).
+
+## helm values — `addons/<addon>/values.yaml`
+
+업스트림 차트에 넘기는 값은 두 종류이고 자리가 다르다. 저장소가 이미 아는 값(tolerations ·
+serviceAccount · replicas)은 `addons/<addon>/values.yaml`에 두고, ApplicationSet이 multi-source의
+`$values/addons/<addon>/values.yaml`로 읽는다. 팬아웃 시점에만 정해지는 값(`{{name}}` · cluster
+Secret 라벨)은 ApplicationSet의 `helm.parameters`에 남는다 — fasttemplate이 파일 안에서는 동작하지
+않기 때문이다.
+
+staged addon(ALBC · Karpenter · Kyverno)은 prd·nonprd 두 ApplicationSet이 **같은 파일**을 읽는다.
+승격 때 갈리는 값은 `targetRevision` 하나이고, values는 갈릴 수 없다. values 파일 안의 주석은
+렌더 결과에도 Application spec에도 들어가지 않으므로 고쳐도 `OutOfSync`가 나지 않는다.
+
+⚠️ values 파일을 `addons/baseline/`·`addons/catalog/` 안에 두지 않는다. root App의 `include`가 그
+두 디렉토리를 `*.yaml`로 읽고 그 glob은 `/`를 넘어 매칭하므로, 안에 두면 매니페스트로 읽혀 root
+App의 렌더가 깨진다. ApplicationSet 안 `helm.values: |` 인라인을 쓰지 않는 근거는 `iac-module-library`의
+`docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」이 갖는다.
 
 ---
 
