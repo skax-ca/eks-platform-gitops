@@ -79,10 +79,13 @@ spec:
     #    목록의 검사를 받는다. ns 가 이미 있으면 검사 자체가 없어, 손으로 먼저 만들면 이 줄 없이도
     #    통과하고 두 번째 클러스터에서만 깨진다.
     - { group: "", kind: Namespace }
-    # Kyverno 가 배포하는 정책 CR. ⚠️ Kyverno 의 ValidatingWebhookConfiguration 은 렌더 결과에
-    #    없다 — 컨트롤러가 런타임에 동적 등록하므로 ArgoCD 가 소유하지 않는다. 뒤집으면 웹훅이
-    #    잘못돼도 Application 은 Synced Healthy 로 보인다는 뜻이다.
-    - { group: kyverno.io, kind: ClusterPolicy }
+    # Kyverno 가 배포하는 정책 CR — 업스트림 PSS 11개와 우리 커스텀 정책이 같은 kind 다.
+    #    ⛔ legacy kyverno.io/ClusterPolicy 를 여기 두지 않는다. Kyverno 가 그 타입을 제거해
+    #       만들 수 있는 리소스가 아니고, 남겨두면 쓰이지 않는 권한만 열어 둔 것이 된다.
+    #    ⚠️ Kyverno 의 ValidatingWebhookConfiguration 은 렌더 결과에 없다 — 컨트롤러가 런타임에
+    #       동적 등록하므로 ArgoCD 가 소유하지 않는다. 뒤집으면 웹훅이 잘못돼도 Application 은
+    #       Synced Healthy 로 보인다는 뜻이다.
+    - { group: policies.kyverno.io, kind: ValidatingPolicy }
     # KEDA 의 external.metrics APIService. ⚠️ 이것이 깨지면 그 API 그룹 전체가 죽는다. 계층 1 의
     #    metrics-server 와는 그룹이 달라 충돌하지 않는다. 지금은 소비자가 없어 무해하지만 HPA 가
     #    쓰기 시작하면 KEDA 장애가 곧 HPA 장애다 — 그때 가용성 요구를 다시 본다(현재 replicas 1).

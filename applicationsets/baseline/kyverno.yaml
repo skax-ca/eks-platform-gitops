@@ -41,16 +41,11 @@ spec:
       sources:
         - repoURL: https://kyverno.github.io/kyverno/
           chart: kyverno
-          # 🔴 3.8 라인에 머문다. 3.9.0 부터 kyverno-policies 의 `policyType` 기본값이
-          #    ClusterPolicy 에서 ValidatingPolicy(CEL 기반)로 바뀌어 렌더되는 kind 자체가 달라지는데,
-          #    AppProject 의 clusterResourceWhitelist 에는 kyverno.io/ClusterPolicy 만 열려 있고
-          #    우리 커스텀 정책도 ClusterPolicy 다.
-          #    ⇒ 3.9 로 올릴 때 `policyType=ClusterPolicy` 를 명시할지, whitelist 와 커스텀 정책을
-          #      함께 옮길지를 **승격 전에** 답한다. 버전 제약은 아니다(양쪽 다 k8s >= 1.25).
-          #    ⚠️ 명시로 버티는 쪽은 시한부다 — 3.9 차트 values 가 legacy kyverno.io 타입을
-          #       deprecated 로 표시하고 향후 릴리스에서 제거한다고 적는다. 미루는 만큼 CEL 전환
-          #       작업이 커진다.
-          targetRevision: 3.8.2
+          # ⛔ 3.8 라인으로 되돌리지 않는다. 이 엔진이 쓰는 정책 타입은 CEL 기반
+          #    policies.kyverno.io/ValidatingPolicy 이고, legacy kyverno.io 타입(ClusterPolicy·
+          #    Policy·CleanupPolicy·PolicyException)은 v1.19 에서 deprecated, v1.20 에서 제거된다.
+          #    AppProject 의 whitelist 와 커스텀 정책이 이미 새 kind 라 되돌리면 셋이 함께 어긋난다.
+          targetRevision: 3.9.1
           helm:
             valueFiles:
               - $values/addons/kyverno/values.yaml
@@ -99,7 +94,7 @@ spec:
       sources:
         - repoURL: https://kyverno.github.io/kyverno/
           chart: kyverno
-          targetRevision: 3.8.2
+          targetRevision: 3.9.1
           helm:
             valueFiles:
               - $values/addons/kyverno/values.yaml

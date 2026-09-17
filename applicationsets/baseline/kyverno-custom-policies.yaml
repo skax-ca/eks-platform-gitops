@@ -1,4 +1,4 @@
-# Kyverno 커스텀 정책 — baseline addon. 이 저장소가 직접 소유하는 ClusterPolicy 다.
+# Kyverno 커스텀 정책 — baseline addon. 이 저장소가 직접 소유하는 ValidatingPolicy 다.
 #
 # 업스트림 정책(kyverno-policies.yaml)과 별도 Application 인 이유는 소유권이다. 그쪽은 차트 하나로
 #    source 가 고정돼 있어 새 정책을 주입할 수 없다.

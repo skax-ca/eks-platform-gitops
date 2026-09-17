@@ -71,7 +71,7 @@ addons/<addon>/              # 위 ApplicationSet의 source가 읽는 내용물.
 addons/<addon>/values.yaml   #   업스트림 차트 helm values. 티어 쌍이 같은 파일을 읽는다(아래 "helm values" 절)
 addons/gateway/shared-gateway/  #   GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
 addons/karpenter/nodepool/   #   NodePool/EC2NodeClass 로컬 helm 차트(per-cluster 값 주입)
-addons/kyverno/custom-policies/ #   이 저장소가 직접 소유하는 ClusterPolicy 매니페스트
+addons/kyverno/custom-policies/ #   이 저장소가 직접 소유하는 ValidatingPolicy 매니페스트
 scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬 게이트" 절)
 .githooks/                   # pre-commit 훅
 ```
@@ -296,7 +296,7 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 | `aws-load-balancer-controller` | `aws.github.io/eks-charts` | 3.5.0 | `kube-system` | baseline(전 클러스터, `environment` 라벨 존재 시 매칭) |
 | `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.1 | `kube-system` | baseline |
 | `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | baseline |
-| `kyverno` + `kyverno-policies` | `kyverno.github.io/kyverno` | 3.8.2 | `kyverno` | baseline, `CreateNamespace=true` |
+| `kyverno` + `kyverno-policies` | `kyverno.github.io/kyverno` | 3.9.1 | `kyverno` | baseline, `CreateNamespace=true` |
 | Gateway API 표준 CRD | git repo(디렉토리) `kubernetes-sigs/gateway-api` | v1.6.2 | `kube-system`(형식상 값) | baseline. AWS 전용 Gateway CRD는 별도 addon 없이 `aws-load-balancer-controller` chart의 `crds/` 폴더가 이미 설치한다 |
 | `gateway`(GatewayClass·LoadBalancerConfiguration·Gateway) | 로컬 차트(`addons/gateway/shared-gateway/`) | — | `gateway-system` | baseline, `CreateNamespace=true`. HTTPRoute·백엔드는 앱팀 저장소 소관(범위 밖) |
 | `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | opt-in 카탈로그(cluster Secret 라벨 `addon-keda: enabled`) |
@@ -304,7 +304,7 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 
 ### 운영 노트
 
-- **Kyverno Audit 모드**: `validationFailureAction: Audit`, `failurePolicy: Ignore`로 운영 — 웹훅에
+- **Kyverno Audit 모드**: `validationActions: [Audit]`, `failurePolicy: Ignore`로 운영 — 웹훅에
   닿지 못해도 백그라운드 스캔이 PolicyReport를 계속 만든다. `argocd` 네임스페이스는 Kyverno 웹훅의
   기본 제외 대상이 **아니다**(`kube-system`·`kyverno`만 제외) — Enforce 전환 시 `failurePolicy: Fail`과
   함께 올려야 순환 의존(Kyverno 장애 → ArgoCD 막힘 → Kyverno를 고칠 수단 상실)을 피한다.
@@ -316,7 +316,7 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
   해시·`server.secretkey`·TLS)을 지울 수 있다. `ServerSideApply`는 자신이 선언한 필드만 소유하므로
   차트가 선언하지 않은 값은 건드리지 않는다.
 - **`kyverno`/`kyverno-policies` diff 옵션**: `ServerSideApply=true`에 더해
-  `compare-options: ServerSideDiff=true`도 쓴다 — CRD·ClusterPolicy의 일부 필드가 apiserver
+  `compare-options: ServerSideDiff=true`도 쓴다 — CRD·ValidatingPolicy의 일부 필드가 apiserver
   기본값으로 채워져 영구 `OutOfSync`가 되는 것을 막는다. `IncludeMutationWebhook=true`는 켜지 않는다
   — 웹훅 변형까지 diff에 들어와 새 drift를 만든다.
 - **Gateway API를 이미 떠 있는 클러스터에 추가할 때**: ALBC는 Gateway API CRD 존재 여부를 파드

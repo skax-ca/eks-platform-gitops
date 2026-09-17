@@ -1,9 +1,9 @@
-# 이 저장소가 직접 소유하는 ClusterPolicy. 업스트림 PSS 정책과 별도 Application 인 이유는
+# 이 저장소가 직접 소유하는 ValidatingPolicy. 업스트림 PSS 정책과 별도 Application 인 이유는
 # applicationsets/baseline/kyverno-custom-policies.yaml 헤더가 갖는다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1beta1
+kind: ValidatingPolicy
 metadata:
   name: require-karpenter-resources
   annotations:
@@ -22,52 +22,59 @@ metadata:
       정책(require-requests-limits, kyverno.io/policies/best-practices)과 AWS EKS
       Best Practices Guide가 공통으로 권고하는 방향이다.
 spec:
-  # ⚠️ Enforce 다 — Audit 으로 먼저 관찰하지 않고 바로 차단한다. failurePolicy 는 적지 않는다.
-  #    ClusterPolicy 기본값 Fail 이 Enforce 와 짝이 맞는 조합이다(업스트림 PSS 정책이
-  #    Audit + Ignore 로 짝을 맞춘 것과 같은 원칙, 반대 방향).
-  validationFailureAction: Enforce
-  background: true
-  rules:
-    - name: require-cpu-memory-requests-and-memory-limit
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-      exclude:
-        any:
-          # ArgoCD 자기 자신은 제외한다. argo-cd 차트가 모든 컴포넌트를 resources: {} 로 두고
-          # bootstrap/argocd-values.yaml 도 그 값을 채우지 않아서, 빼지 않으면 ArgoCD 자신의
-          # 재배포가 이 정책에 막힌다 — Kyverno 장애가 ArgoCD 를 막고 고칠 수단을 잃는 순환이다.
-          # kube-system·kyverno·kube-public·kube-node-lease 는 Kyverno 기본 resourceFilters 가
-          # 이미 모든 정책에서 제외하므로 여기 적지 않는다.
-          - resources:
-              namespaces:
-                - argocd
-      validate:
-        message: >-
-          Karpenter가 올바르게 스케줄링하려면 모든 컨테이너에 CPU/메모리 requests와
-          메모리 limit이 필요하다(cpu limit은 의도적으로 요구하지 않는다).
-        pattern:
-          spec:
-            containers:
-              - resources:
-                  requests:
-                    cpu: "?*"
-                    memory: "?*"
-                  limits:
-                    memory: "?*"
-            =(initContainers):
-              - resources:
-                  requests:
-                    cpu: "?*"
-                    memory: "?*"
-                  limits:
-                    memory: "?*"
-            =(ephemeralContainers):
-              - resources:
-                  requests:
-                    cpu: "?*"
-                    memory: "?*"
-                  limits:
-                    memory: "?*"
+  # ⚠️ Deny 다 — Audit 으로 먼저 관찰하지 않고 바로 차단한다. legacy 타입의 Enforce 에 해당하는
+  #    값이고 enum 에 Enforce 는 없다(Deny·Audit·Warn 셋뿐). failurePolicy 는 적지 않는다.
+  #    기본값 Fail 이 Deny 와 짝이 맞는 조합이다(업스트림 PSS 정책이 Audit + Ignore 로 짝을
+  #    맞춘 것과 같은 원칙, 반대 방향).
+  validationActions:
+    - Deny
+
+  matchConstraints:
+    # 업스트림 PSS 정책과 같은 모양이다 — pods 만 걸고 autogen 은 적지 않는다. 파드 컨트롤러
+    #    (Deployment·Job 등) 대응 규칙은 Kyverno 가 서버에서 생성한다.
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    # ArgoCD 자기 자신은 제외한다. argo-cd 차트가 모든 컴포넌트를 resources: {} 로 두고
+    #    bootstrap/argocd-values.yaml 도 그 값을 채우지 않아서, 빼지 않으면 ArgoCD 자신의
+    #    재배포가 이 정책에 막힌다 — Kyverno 장애가 ArgoCD 를 막고 고칠 수단을 잃는 순환이다.
+    #    kube-system·kyverno·kube-public·kube-node-lease 는 Kyverno 기본 resourceFilters 가
+    #    이미 모든 정책에서 제외하므로 여기 적지 않는다.
+    # 🔑 kubernetes.io/metadata.name 은 apiserver 가 모든 네임스페이스에 자동으로 붙이는 라벨이라
+    #    네임스페이스 이름으로 거르는 것과 같다. excludeResourceRules 는 group/resource 단위라
+    #    네임스페이스를 뺄 수 없어서 이 selector 가 그 자리를 대신한다.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - argocd
+
+  # ⚠️ 세 식은 AND 다 — 하나라도 false 면 차단한다. initContainers·ephemeralContainers 는
+  #    없을 수 있어 has() 로 먼저 거른다(legacy pattern 의 =(...) 조건부 앵커에 해당한다).
+  #    resources.requests·limits 는 map 이라 필드 존재는 has(), 키 존재는 in 으로 본다.
+  validations:
+    - expression: >-
+        object.spec.containers.all(c,
+          has(c.resources)
+          && has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests
+          && has(c.resources.limits) && 'memory' in c.resources.limits)
+      message: >-
+        Karpenter가 올바르게 스케줄링하려면 모든 컨테이너에 CPU/메모리 requests와
+        메모리 limit이 필요하다(cpu limit은 의도적으로 요구하지 않는다).
+    - expression: >-
+        !has(object.spec.initContainers) || object.spec.initContainers.all(c,
+          has(c.resources)
+          && has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests
+          && has(c.resources.limits) && 'memory' in c.resources.limits)
+      message: >-
+        initContainers에도 CPU/메모리 requests와 메모리 limit이 필요하다.
+    - expression: >-
+        !has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.all(c,
+          has(c.resources)
+          && has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests
+          && has(c.resources.limits) && 'memory' in c.resources.limits)
+      message: >-
+        ephemeralContainers에도 CPU/메모리 requests와 메모리 limit이 필요하다.
