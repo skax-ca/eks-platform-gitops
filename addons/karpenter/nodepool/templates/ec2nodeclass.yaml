@@ -1,5 +1,7 @@
 {{- $clusterName := required "clusterName 이 비어 있다 — ApplicationSet 이 cluster generator 의 {{name}} 으로 주입한다" .Values.clusterName -}}
 {{- $nodeRole := required "nodeRole 이 비어 있다 — cluster Secret 의 karpenterNodeRole 라벨에서 온다" .Values.nodeRole -}}
+{{- $tier := required "tier 가 비어 있다 — cluster Secret 의 tier 라벨에서 온다" .Values.tier -}}
+{{- $amiAlias := required (printf "amiAliasByTier 에 tier %q 항목이 없다 — values.yaml 에 그 티어를 추가한다" $tier) (index .Values.amiAliasByTier $tier) -}}
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
@@ -13,8 +15,9 @@ spec:
   #    instance profile 은 Karpenter v1 이 이 role 로부터 자체 생성한다 — 우리가 만들지 않는다.
   role: {{ $nodeRole | quote }}
 
+  # 티어마다 다른 값이 온다. 승격(nonprd 먼저, 그다음 prd)의 근거는 values.yaml 이 갖는다.
   amiSelectorTerms:
-    - alias: {{ .Values.amiAlias }}
+    - alias: {{ $amiAlias }}
 
   # ⚠️ subnet 태그는 소비자의 VPC 모듈이, SG 태그는 modules/eks-cluster 의
   #    `node_security_group_tags`(enable_karpenter=true일 때 계약으로 부여)가 붙인다.

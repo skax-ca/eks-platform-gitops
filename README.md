@@ -236,7 +236,7 @@ ApplicationSet이 읽는 라벨이다. 빠지면 그 addon만 조용히 안 뜬�
 | 라벨 | 읽는 쪽 | 값 |
 |---|---|---|
 | `environment` | baseline 팬아웃 전체 | `hub` · `dev` 등. 존재 자체가 매칭 조건이다 |
-| `tier` | staged addon의 `-prd`/`-nonprd` 선택 | `prd` \| `nonprd` |
+| `tier` | staged addon의 `-prd`/`-nonprd` 선택 · NodePool 차트의 AMI 핀 선택 | `prd` \| `nonprd` |
 | `vpcName` | ALBC의 `vpcTags.Name` | VPC의 Name 태그 |
 | `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름. 26자 hash 접미가 붙어 **재구축마다 바뀐다** |
 | `addon-<name>: enabled` | catalog addon 구독 | `addon-keda` · `addon-cluster-autoscaler` |
