@@ -98,9 +98,12 @@ spec:
     automated:
       # 손으로 바꾼 것을 저장소 상태로 되돌린다 — 자기소멸 원칙의 집행 장치(root-app 과 같다).
       selfHeal: true
-      # ⛔ **prune 은 2단계에서도 켜지 않는다.** root App 과 같은 이유에 더해, seed 의 helm 잔존물
-      #    (Secret `sh.helm.release.v1.argocd.v1`)과 GitOps 관리 밖 Secret(`argocd-repo-gitops`)이
-      #    "저장소에 없는 리소스"로 분류될 수 있다.
+      # ⛔ **prune 은 2단계에서도 켜지 않는다.** root App 과 같은 이유다 — 저장소 실수 하나가
+      #    ArgoCD 자신의 구성 요소를 지운다. seed 의 helm 릴리스 Secret(`sh.helm.release.v1.argocd.v1`)과
+      #    GitOps 관리 밖 repository Secret(`argocd-repo-gitops`)은 prune 과 무관하다. ArgoCD 는
+      #    `argocd.argoproj.io/tracking-id` 애노테이션이 자기를 가리키는 리소스만 prune 후보로
+      #    보고(argo-cd.readthedocs.io user-guide/resource_tracking), 그 둘에는 그 애노테이션이
+      #    없다. 이 둘을 지키려고 prune 을 끈 것이 아니다.
       prune: false
     syncOptions:
       # 🔴 **이것이 Secret/argocd-secret 을 지킨다 — 이 증분의 가장 큰 위험이다.**
