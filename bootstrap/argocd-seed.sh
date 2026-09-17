@@ -145,7 +145,7 @@ fi
 if (( DRY_RUN )); then
   warn "dry-run 모드. 아무것도 바꾸지 않는다"
   warn "검증하지 않는다. ArgoCD CR 은 CRD 라 클라이언트 dry-run 이 discovery API 를 요구한다(오프라인 불가)"
-  warn "진짜 검증은 실제 실행 때 서버 dry-run 이 한다. 여기서는 '무엇을 어디서 적용하는지'만 본다"
+  warn "검증은 실제 실행 때 서버 dry-run 이 한다. 여기서는 '무엇을 어디서 적용하는지'만 본다"
 fi
 
 # 0단계: ArgoCD 설치(저장소의 values 그대로)
@@ -197,7 +197,7 @@ apply_manifest() {
     #    RESTMapping을 풀려면 discovery API(/api)를 쳐야 하고, --validate=false로 검증을 꺼도 그
     #    호출은 남는다. 클러스터는 private이므로 VPC 밖(팀원 노트북)에서는 i/o timeout으로 늘
     #    막힌다. dry-run의 역할을 "검증"이 아니라 "무엇을 어디서 적용하는지 보여주기"로 좁히고,
-    #    진짜 검증은 실제 실행 경로의 --dry-run=server가 한다.
+    #    검증은 실제 실행 경로의 --dry-run=server가 한다.
     printf '     %-14s %s\n' "kind/name:" \
       "$(awk '/^kind:/{k=$2} /^metadata:/{m=1} m&&/^  name:/{print k"/"$2; exit}' "$file")"
   else
@@ -216,7 +216,7 @@ if want 3; then apply_manifest 3 "platform AppProject" "$PROJECT_FILE"; fi
 if want 4; then apply_manifest 4 "cluster Secret"      "$CLUSTER_FILE"; fi
 if want 5; then apply_manifest 5 "root Application"    "$ROOTAPP_FILE"; fi
 
-# 검증. "적용됐다"와 "동작한다"는 다르다.
+# 검증. apply 가 성공해도 root App 이 저장소를 읽었는지는 따로 본다.
 if (( ! DRY_RUN )) && want 5; then
   step "verify" "흡수 확인"
   cat <<VERIFY

@@ -26,8 +26,7 @@ global:
 dex:
   enabled: false
 
-# notifications controller 를 끈다. 기능을 막는 것이 아니라 기본으로 켜지 않는 것이고, 필요한
-#   소비자가 이 값을 true 로 켠다.
+# notifications controller 를 끈다. 알림을 쓰는 소비자가 이 값을 true 로 켠다.
 notifications:
   enabled: false
 

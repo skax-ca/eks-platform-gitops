@@ -4,7 +4,7 @@
 #    다시 쓰지 않는다. 업그레이드·values 변경은 전부 Git → pull 이다.
 # 🔑 ApplicationSet 이 아니라 Application 인 이유: ArgoCD 는 hub 에만 산다. cluster generator 로
 #    팬아웃하면 등록된 모든 스포크에 ArgoCD 가 통째로 설치된다. ⚠️ 클러스터가 하나뿐일 때는
-#    대상이 hub 자신뿐이라 정상으로 보이고, 두 번째 클러스터가 등록되는 순간 터진다.
+#    대상이 hub 자신뿐이라 정상으로 보이고, 두 번째 클러스터가 등록되는 순간 그 설치가 일어난다.
 # 위치가 applicationsets/ 가 아닌 것도 같은 이유다 — 그 디렉토리의 계약은 전 클러스터 팬아웃이다.
 #    ⚠️ root-app.yaml 의 include 가 이 파일을 경로로 명시한다. 옮기면 그 목록도 함께 고친다.
 #

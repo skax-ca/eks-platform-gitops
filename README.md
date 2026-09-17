@@ -2,7 +2,7 @@
 
 **읽는 사람**: 이 저장소의 매니페스트를 고치거나, 클러스터·addon을 새로 등록하는 사람.
 
-**오너**: GitHub org [`skax-ca`](https://github.com/skax-ca) 소속. 설계 문의는 `iac-module-library`, 클러스터·IAM 문의는 `eks-reference-infra` 쪽과 겹칠 수 있다 — 아래 "다루는 것 / 다루지 않는 것" 참고.
+**오너**: GitHub org [`skax-ca`](https://github.com/skax-ca) 소속. 설계 문의는 `iac-module-library`가, 클러스터·IAM 문의는 `eks-reference-infra`가 받는다.
 
 **플랫폼 GitOps monorepo(계층 2)** — ArgoCD가 pull로 reconcile하는 플랫폼 소관 매니페스트 저장소.
 
@@ -97,15 +97,15 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬
 
 - **손으로 apply하는 매니페스트는 저장소에 커밋된 것과 바이트 단위로 동일해야 한다.** 그래야 root App이 첫 sync에서 흡수해 즉시 no-op이 된다 — 다르면 그 차이가 영구 드리프트로 남는다.
 - ⛔ **helm values도 예외 없음(0단계)**: `helm install -f`에 넘기는 값은 저장소 파일 그대로 써야 하며, `--set`은 쓰지 않는다.
-- ⛔ **완료 조건**: 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제. 선택이 아니라 완료 조건이다.
+- ⛔ **완료 조건**: 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제.
 
 ## `bootstrap/argocd-seed.sh` — 이 저장소가 소유한다
 
 고칠 일이 생기면 여기서 고친다. 다른 저장소로 복사하지 않는다.
 
-**왜 여기인가**: 실행하는 곳이 workbench 하나이고, workbench는 이 저장소만 클론한다. ArgoCD를
-여는 GitHub App의 설치 범위가 이 저장소 하나여서(배포 코드까지 읽게 하지 않으려는 제약) 다른
-저장소는 workbench에 도달하지 않는다.
+실행하는 곳이 workbench 하나이고, workbench는 이 저장소만 클론한다. ArgoCD를 여는 GitHub App의
+설치 범위가 이 저장소 하나여서(배포 코드까지 읽게 하지 않으려는 제약) 다른 저장소는 workbench에
+도달하지 않는다.
 
 ⚠️ `aks-platform-gitops`의 같은 이름 파일과 형제가 아니다. 클라우드마다 독립이고, 한쪽을 고쳐도
 다른 쪽에 반영하지 않는다.
@@ -133,8 +133,8 @@ ApplicationSet이, `values.yaml`은 multi-source가 따로 읽는다), `bootstra
 커밋이 풀거나, `argocd-seed.sh --from 5 --to 5`로 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
 
 `addons/<addon>/<dir>/`가 helm 차트인지 평문 매니페스트인지는 **per-cluster 값을 주입하는지**로만
-정한다. ApplicationSet의 fasttemplate은 Application spec에만 적용되고 git 경로 안의 파일에는
-적용되지 않으므로, cluster generator의 값을 CR에 넣으려면 helm이 필요하다(`shared-gateway`·
+정한다. ArgoCD는 ApplicationSet의 fasttemplate을 Application spec에서만 치환하고 git 경로 안의
+파일에서는 치환하지 않으므로, cluster generator의 값을 CR에 넣으려면 helm이 필요하다(`shared-gateway`·
 `karpenter/nodepool`). 주입할 값이 없으면 평문이다(`kyverno/custom-policies`).
 
 ## ApplicationSet 공통 규약
@@ -155,8 +155,8 @@ prune한다.** 정리할 수 있는 시점은 전면 철거 이후 seed 이전�
 ### staged 전파 — `-prd` · `-nonprd` 두 블록
 
 한 파일 안에 티어별 ApplicationSet 두 개를 둔다. 승격할 때 두 `targetRevision`을 나란히 읽어야
-하기 때문이고, 그 차이가 승격이 어디까지 갔는지를 저장소에 기록한다. 다르면 진행 중, 같으면 끝난
-것이다. 티어를 나누지 않는 addon(`uniform`)은 블록이 하나다.
+하기 때문이다. 두 값이 다르면 승격이 진행 중이고, 같으면 끝난 것이다. 티어를 나누지 않는
+addon(`uniform`)은 블록이 하나다.
 
 ⛔ **두 블록을 함께 고친다.** 갈려도 되는 값은 `targetRevision` 하나다. values는 양 블록이 같은
 파일을 읽어 갈릴 수 없고, `parameters`·네임스페이스·`syncPolicy`는 갈리면 티어 간 동작이 달라진다.
@@ -270,7 +270,7 @@ APF 같은 기술적 강제도 없다.
 - 순서: Terraform 쪽 Pod Identity association을 `kube-system/cluster-autoscaler`로 **먼저** 고정
   (관례로 고른 값이고 공식 근거는 없다) → 이 매니페스트가 거기 맞춤.
 - 즉 위 근거 3(집행 장치)과 인과가 반대다 — association이 원인이 아니라 결과다.
-- 그래서 근거 3과 같은 층으로 세지 않고 정직하게 **약한 예외**로 남겨 둔다. 새 예외를 추가할 때 이
+- 그래서 근거 3과 같은 층으로 세지 않고 **약한 예외**로 남겨 둔다. 새 예외를 추가할 때 이
   항목을 전례로 들지 않는다.
 
 전용 ns addon을 추가할 때는 `syncPolicy.syncOptions`에 `CreateNamespace=true`를 넣는다. 자동 생성된

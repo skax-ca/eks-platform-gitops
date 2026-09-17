@@ -1,7 +1,7 @@
 # Kyverno 엔진 — baseline addon. 정책은 kyverno-policies.yaml(업스트림 PSS)과
 # kyverno-custom-policies.yaml(우리 소유)이 갖는다.
 #
-# baseline 인 이유: 옵트인 가드레일은 가드레일이 아니다.
+# baseline 인 이유: 옵트인으로 두면 라벨을 빠뜨린 클러스터가 정책 엔진 없이 뜬다.
 # ⛔ 엔진과 업스트림 정책은 **같은 마이너 라인**에 둔다. 차트 번호 일치가 아니라 라인 일치다 —
 #    정책 차트가 요구하는 것은 엔진 app 버전의 하한이고, 그 라인에 짝이 없는 엔진 패치(보안
 #    백포트가 이 형태로 온다)는 엔진만 올린다. 승격은 nonprd 둘을 먼저, 그다음 prd 둘이다.

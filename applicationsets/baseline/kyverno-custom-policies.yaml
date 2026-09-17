@@ -1,7 +1,7 @@
 # Kyverno 커스텀 정책 — baseline addon. 이 저장소가 직접 소유하는 ValidatingPolicy 다.
 #
-# 업스트림 정책(kyverno-policies.yaml)과 별도 Application 인 이유는 소유권이다. 그쪽은 차트 하나로
-#    source 가 고정돼 있어 새 정책을 주입할 수 없다.
+# 업스트림 정책(kyverno-policies.yaml)과 Application 을 나눈다. 그쪽은 source 가 차트 하나로
+#    고정돼 있어 우리가 만든 정책을 끼워 넣을 자리가 없다.
 # uniform 인 이유: targetRevision 이 main 이라 승격할 버전이 없다. ⚠️ 그래서 양 티어가 같은 정책을
 #    본다 — 엔진 승격이 진행 중이면 이 정책이 두 엔진 버전 모두에서 유효해야 한다. 새 버전에서 생긴
 #    필드를 쓰려면 엔진 승격을 끝내고 커밋한다.
