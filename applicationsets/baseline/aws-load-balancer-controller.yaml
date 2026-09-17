@@ -15,7 +15,7 @@
 #    근거 3겹(순서가 중요하다 — 3만 적으면 논리가 뒤집힌다):
 #      1. AWS EKS User Guide 가 `eksctl create iamserviceaccount --namespace=kube-system` +
 #         `helm ... -n kube-system` 을 쓴다. upstream kubernetes-sigs 설치 가이드도 동일하다.
-#      2. (Karpenter 쪽 근거) APF FlowSchema — addons/baseline/karpenter.yaml 헤더 참조.
+#      2. (Karpenter 쪽 근거) APF FlowSchema — applicationsets/baseline/karpenter.yaml 헤더 참조.
 #         두 컨트롤러를 같은 ns 에 두는 편이 예외를 하나로 유지한다.
 #      3. **집행 장치** — Pod Identity association 이 kube-system/aws-load-balancer-controller 다
 #         (modules/eks-cluster/iam.tf 가 명시).
@@ -62,7 +62,7 @@ spec:
       name: '{{name}}-aws-lbc'
       # 이 finalizer가 없으면 Application CR을 지워도 실제 리소스는 클러스터에
       # orphan으로 남는다.
-      # (addons/baseline/karpenter.yaml 헤더 참조).
+      # (applicationsets/baseline/karpenter.yaml 헤더 참조).
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:

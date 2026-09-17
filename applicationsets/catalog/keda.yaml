@@ -2,7 +2,7 @@
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
-# **`addons/catalog/` 의 첫 파일이다.** `addons/baseline/`(등록만 하면 배포)과 달리, 팀이 라벨로
+# **`applicationsets/catalog/` 의 첫 파일이다.** `applicationsets/baseline/`(등록만 하면 배포)과 달리, 팀이 라벨로
 #    옵트인해야 배포되는 카탈로그 addon 의 실물 예시다.
 #
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13,8 +13,8 @@
 #      staged  : matchLabels {tier: <값>} 으로 ApplicationSet 을 값별 분리 → 티어별 승격
 #      opt-in  : matchLabels {addon-keda: enabled}                       → **구독한 클러스터만**
 #
-#    ⚠️ 디렉토리와 정책은 **다른 축**이다. `addons/baseline/` 에는 uniform(kyverno)과
-#       staged(karpenter·ALBC·gateway-api-crds)가 함께 있고, `addons/catalog/` 가 opt-in 전용이다.
+#    ⚠️ 디렉토리와 정책은 **다른 축**이다. `applicationsets/baseline/` 에는 uniform(kyverno)과
+#       staged(karpenter·ALBC·gateway-api-crds)가 함께 있고, `applicationsets/catalog/` 가 opt-in 전용이다.
 #       디렉토리는 *"팀이 고르는가"* 를, 정책은 *"누가 받고 어떤 버전을 받는가"* 를 가른다.
 #
 #    ⇒ 구독은 cluster Secret 에 라벨을 다는 것으로 이뤄진다
@@ -27,7 +27,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # 네임스페이스 = **keda (전용 ns 신설)** — 이 repo의 네임스페이스 기본 규칙.
-#    ⛔ addons/baseline/{aws-load-balancer-controller,karpenter}.yaml 의 `kube-system` 을
+#    ⛔ applicationsets/baseline/{aws-load-balancer-controller,karpenter}.yaml 의 `kube-system` 을
 #       복사해 오지 말 것. 그 둘은 근거를 댄 예외다.
 #    ⛔ `managedNamespaceMetadata` 를 쓰지 않는다 — 쓰면 ArgoCD 가 ns 를 소유하게 되고
 #       아래 prune:true 와 겹쳐 **addon 제거가 네임스페이스째 지운다**.
@@ -60,7 +60,7 @@ spec:
       name: '{{name}}-keda'
       # 이 finalizer가 없으면 Application CR을 지워도 실제 리소스는 클러스터에
       # orphan으로 남는다.
-      # (addons/baseline/karpenter.yaml 헤더 참조).
+      # (applicationsets/baseline/karpenter.yaml 헤더 참조).
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:

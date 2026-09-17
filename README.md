@@ -62,12 +62,13 @@ bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application. 위 values를 $
 bootstrap/argocd-seed.sh     # seed 실행 스크립트. 이 저장소가 소유한다(아래 절)
 clusters/<env>/<cluster>/    # cluster Secret. 새 클러스터 = 디렉토리 1개(O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
-addons/baseline/             # 전 클러스터 팬아웃 ApplicationSet(environment 라벨)
-addons/catalog/              # opt-in 카탈로그 — 구독한 클러스터만(addon-<name> 라벨)
-addons/<addon>/values.yaml   # 업스트림 차트 helm values. 티어 쌍이 같은 파일을 읽는다(아래 "helm values" 절)
-addons/gateway/shared-gateway/  # GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
-addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트(per-cluster 값 주입)
-addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPolicy 매니페스트
+applicationsets/baseline/    # 전 클러스터 팬아웃 ApplicationSet(environment 라벨). root App이 읽는다
+applicationsets/catalog/     # opt-in 카탈로그 ApplicationSet — 구독한 클러스터만(addon-<name> 라벨)
+addons/<addon>/              # 위 ApplicationSet의 source가 읽는 내용물. root App은 읽지 않는다
+addons/<addon>/values.yaml   #   업스트림 차트 helm values. 티어 쌍이 같은 파일을 읽는다(아래 "helm values" 절)
+addons/gateway/shared-gateway/  #   GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
+addons/karpenter/nodepool/   #   NodePool/EC2NodeClass 로컬 helm 차트(per-cluster 값 주입)
+addons/kyverno/custom-policies/ #   이 저장소가 직접 소유하는 ClusterPolicy 매니페스트
 scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬 게이트" 절)
 .githooks/                   # pre-commit 훅
 ```
@@ -114,16 +115,16 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬
 ## root App이 읽는 범위 — `include` allow-list
 
 `bootstrap/root-app.yaml`은 `directory.include`에 적힌 경로만 매니페스트로 읽는다. 지금은
-`projects/`·`clusters/**/cluster-secret.yaml`·`addons/baseline/`·`addons/catalog/`·`bootstrap/`의
-두 Application 파일이다. **그 밖은 무엇이든 무시한다** — `addons/<addon>/<dir>/`의 로컬 차트와 CR
-매니페스트(전담 ApplicationSet이 따로 읽는다), helm values(`addons/<addon>/values.yaml`·
-`bootstrap/argocd-values.yaml`), 도구 파일 전부.
+`projects/`·`clusters/**/cluster-secret.yaml`·`applicationsets/**`·`bootstrap/`의 두 Application
+파일이다. **그 밖은 무엇이든 무시한다** — `addons/` 전체(로컬 차트·CR 매니페스트는 전담
+ApplicationSet이, `values.yaml`은 multi-source가 따로 읽는다), `bootstrap/argocd-values.yaml`, 도구
+파일 전부.
 
 이 저장소는 `exclude`와 `+argocd:skip-file-rendering` 마커를 쓰지 않는다. 기각 근거는
 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」이 갖는다.
 
-매니페스트 디렉토리를 새로 만들면 `include`에 한 줄 더한다. 이미 있는 디렉토리 안에서 파일이
-늘고 주는 것은 `root-app.yaml`과 무관하다. ⚠️ **렌더가 깨지는 파일이 든 경로**를 `include`에
+매니페스트 디렉토리를 새로 만들면 `include`에 한 줄 더한다. `applicationsets/` 아래는 하위
+디렉토리까지 전부 읽으므로(`**`), 그 안에서 파일이 늘고 주는 것은 `root-app.yaml`과 무관하다. ⚠️ **렌더가 깨지는 파일이 든 경로**를 `include`에
 넣으면 그 spec이 적용된 뒤부터 자기 갱신이 멈춘다. root App은 자기 spec을 클러스터에 적용된
 옛 spec으로 렌더한 뒤에야 갱신하는데, 그 렌더가 깨지면 갱신에 이르지 못한다. 그 파일을 고치는
 커밋이 풀거나, `argocd-seed.sh --from 5 --to 5`로 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
@@ -145,9 +146,8 @@ staged addon(ALBC · Karpenter · Kyverno)은 prd·nonprd 두 ApplicationSet이 
 승격 때 갈리는 값은 `targetRevision` 하나이고, values는 갈릴 수 없다. values 파일 안의 주석은
 렌더 결과에도 Application spec에도 들어가지 않으므로 고쳐도 `OutOfSync`가 나지 않는다.
 
-⚠️ values 파일을 `addons/baseline/`·`addons/catalog/` 안에 두지 않는다. root App의 `include`가 그
-두 디렉토리를 `*.yaml`로 읽고 그 glob은 `/`를 넘어 매칭하므로, 안에 두면 매니페스트로 읽혀 root
-App의 렌더가 깨진다. ApplicationSet 안 `helm.values: |` 인라인을 쓰지 않는 근거는 `iac-module-library`의
+⚠️ values 파일을 `applicationsets/` 안에 두지 않는다. root App의 `include`가 그 디렉토리를
+`**/*.yaml`로 읽으므로, 안에 두면 매니페스트로 읽혀 root App의 렌더가 깨진다. ApplicationSet 안 `helm.values: |` 인라인을 쓰지 않는 근거는 `iac-module-library`의
 `docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」이 갖는다.
 
 ---
@@ -162,7 +162,7 @@ git config core.hooksPath .githooks
 brew install shellcheck        # 셸 게이트가 요구한다. 없으면 훅이 즉시 실패한다
 ```
 
-`.githooks/pre-commit`이 staged 파일 중 `addons/`·`projects/`·`clusters/`·`bootstrap/`의
+`.githooks/pre-commit`이 staged 파일 중 `applicationsets/`·`addons/`·`projects/`·`clusters/`·`bootstrap/`의
 `.yaml`/`.sh`, 저장소 `.md`, `scripts/*.py`, `.githooks/*`를 골라
 `scripts/validate-comment-conventions.py`에 넘긴다. 검사기는 주석에 **외부 참조**(문서 절
 번호·결정 식별자)와 **이력 서술**(날짜·세션 번호, 그리고 측정을 사건으로 적은 서술)이 있는지만

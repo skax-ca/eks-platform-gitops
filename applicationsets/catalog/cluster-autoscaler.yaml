@@ -66,7 +66,7 @@ spec:
       name: '{{name}}-cluster-autoscaler'
       # 이 finalizer가 없으면 Application CR을 지워도 실제 리소스는 클러스터에
       # orphan으로 남는다.
-      # (addons/baseline/karpenter.yaml 헤더 참조).
+      # (applicationsets/baseline/karpenter.yaml 헤더 참조).
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:

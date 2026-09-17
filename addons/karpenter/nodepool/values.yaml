@@ -1,5 +1,5 @@
 # ⚠️ 아래 둘은 **기본값이 없다.** ApplicationSet 이 cluster generator 에서 주입한다
-#    (addons/baseline/karpenter.yaml ②). 비어 있으면 템플릿이 required 로 실패한다 —
+#    (applicationsets/baseline/karpenter.yaml ②). 비어 있으면 템플릿이 required 로 실패한다 —
 #    조용히 틀린 값이 들어가는 것보다 낫다.
 clusterName: ""
 nodeRole: ""

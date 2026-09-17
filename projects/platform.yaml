@@ -47,12 +47,12 @@ spec:
     - https://kedacore.github.io/charts
     # ── Cluster Autoscaler ──
     # ②opt-in 카탈로그. 로컬 HTTP 200 확인(egress canary 는 옵트인 전 별도 실행 필요 —
-    #    addons/catalog/cluster-autoscaler.yaml 헤더 참조).
+    #    applicationsets/catalog/cluster-autoscaler.yaml 헤더 참조).
     - https://kubernetes.github.io/autoscaler
     # ── Gateway API 표준 CRD ──
     # ⚠️ 다른 항목과 달리 helm repo가 아니라 git repo(디렉토리 소스) — repoURL은 호스트가 아니라
     #    저장소 전체를 가리킨다. egress canary는 아직 실행 전이라 실제 sync에서 처음 검증된다.
-    #    근거는 addons/baseline/gateway-api-crds.yaml 헤더 참조.
+    #    근거는 applicationsets/baseline/gateway-api-crds.yaml 헤더 참조.
     #    ⛔ AWS 전용 Gateway CRD(TargetGroupConfiguration 등)는 여기 별도로 추가하지 않는다 —
     #    aws-load-balancer-controller 차트 자신의 crds/ 폴더에 이미 들어있고 ArgoCD가 기본값
     #    (skipCrds 미설정 = helm template --include-crds)으로 이미 설치한다(helm template
@@ -154,7 +154,7 @@ spec:
     #    Application이 "is not permitted in project" InvalidSpecError로 막힌 뒤에야 드러났다.
     - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicy }
     - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding }
-    # ── Gateway API 실사용 계층 (addons/baseline/gateway.yaml) ──
+    # ── Gateway API 실사용 계층 (applicationsets/baseline/gateway.yaml) ──
     # GatewayClass는 cluster-scoped다(Gateway·LoadBalancerConfiguration은 namespace-scoped라
     #    아래 namespaceResourceWhitelist가 이미 커버한다 — 여기 추가할 것이 없다).
     - { group: gateway.networking.k8s.io, kind: GatewayClass }

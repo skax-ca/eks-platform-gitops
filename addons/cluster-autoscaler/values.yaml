@@ -1,7 +1,7 @@
 # Cluster Autoscaler 차트 values — cluster-autoscaler ApplicationSet 이 읽는다
 #
 # 팬아웃 시점에 정해지는 값(autoDiscovery.clusterName)은 여기 없다.
-#    addons/catalog/cluster-autoscaler.yaml 의 helm.parameters 가 넘긴다.
+#    applicationsets/catalog/cluster-autoscaler.yaml 의 helm.parameters 가 넘긴다.
 # 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
 
 # Pod Identity 바인딩 대상(kube-system/cluster-autoscaler). IRSA 애노테이션 불필요.

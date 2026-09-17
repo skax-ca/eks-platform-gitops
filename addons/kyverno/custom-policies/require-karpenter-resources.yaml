@@ -26,7 +26,7 @@ metadata:
 spec:
   # ⚠️ Enforce다 — Audit으로 먼저 관찰하지 않고 바로 차단한다.
   #    failurePolicy는 값을 적지 않는다 — ClusterPolicy 기본값이 Fail이고,
-  #    Enforce와 Fail이 짝이 맞는 조합이다(addons/baseline/kyverno.yaml의
+  #    Enforce와 Fail이 짝이 맞는 조합이다(applicationsets/baseline/kyverno.yaml의
   #    kyverno-policies가 Audit+Ignore로 짝을 맞춘 것과 반대 방향으로 같은 원칙).
   validationFailureAction: Enforce
   background: true

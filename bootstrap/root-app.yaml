@@ -41,13 +41,14 @@ spec:
       #    파일이 늘고 줄어드는 것은 이 파일과 무관하다.
       #      · projects/*.yaml                 AppProject
       #      · clusters/**/cluster-secret.yaml cluster Secret. `**` 라 env 깊이와 무관하다
-      #      · addons/baseline/*.yaml          팬아웃 ApplicationSet
-      #      · addons/catalog/*.yaml           opt-in ApplicationSet
+      #      · applicationsets/**/*.yaml       ApplicationSet 전부(baseline 팬아웃 · catalog opt-in).
+      #                                        이 디렉토리의 계약이 "ApplicationSet 만 둔다" 라
+      #                                        하위 디렉토리가 늘어도 이 줄은 그대로다
       #      · bootstrap/root-app.yaml         이 파일 자신(자기소멸)
       #      · bootstrap/argocd-app.yaml       ArgoCD 자기 관리 Application
-      #    bootstrap/argocd-values.yaml 은 helm values 라 넣지 않는다. argocd-app.yaml 이 다른
-      #    source 에서 values 로 읽는다.
-      include: '{projects/*.yaml,clusters/**/cluster-secret.yaml,addons/baseline/*.yaml,addons/catalog/*.yaml,bootstrap/root-app.yaml,bootstrap/argocd-app.yaml}'
+      #    addons/ 는 통째로 범위 밖이다 — ApplicationSet 의 source 가 읽는 내용물(helm values ·
+      #    로컬 차트 · CR)만 있다. bootstrap/argocd-values.yaml 도 helm values 라 넣지 않는다.
+      include: '{projects/*.yaml,clusters/**/cluster-secret.yaml,applicationsets/**/*.yaml,bootstrap/root-app.yaml,bootstrap/argocd-app.yaml}'
 
   destination:
     # ⚠️ projects/platform.yaml 의 destinations 와 같은 값이어야 한다.

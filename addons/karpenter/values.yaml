@@ -1,7 +1,7 @@
 # Karpenter 컨트롤러 차트 values — karpenter-prd·karpenter-nonprd 두 ApplicationSet 이 같은 파일을 읽는다
 #
 # 팬아웃 시점에 정해지는 값(settings.clusterName·settings.interruptionQueue)은 여기 없다.
-#    addons/baseline/karpenter.yaml 의 helm.parameters 가 넘긴다.
+#    applicationsets/baseline/karpenter.yaml 의 helm.parameters 가 넘긴다.
 # 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
 
 # system 관리형 노드그룹의 workload-class=system NoSchedule taint 를 넘는다.

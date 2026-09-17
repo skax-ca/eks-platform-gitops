@@ -2,7 +2,7 @@
 #    같은 파일을 읽는다
 #
 # 팬아웃 시점에 정해지는 값(clusterName·vpcTags.Name)은 여기 없다.
-#    addons/baseline/aws-load-balancer-controller.yaml 의 helm.parameters 가 넘긴다.
+#    applicationsets/baseline/aws-load-balancer-controller.yaml 의 helm.parameters 가 넘긴다.
 # 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
 
 # system 관리형 노드그룹의 workload-class=system NoSchedule taint 를 넘는다.

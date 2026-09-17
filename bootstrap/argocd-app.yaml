@@ -16,7 +16,7 @@
 #       형태의 함정이 있다 — 자동 생성 Namespace가 AppProject의 clusterResourceWhitelist 검사를
 #       받는데, ns가 이미 있으면 그 검사 자체가 생기지 않아 **두 번째 클러스터에서만** 터진다.
 #
-# 위치도 `addons/baseline/` 이 아니다. 그 디렉토리의 계약은 "전 클러스터 팬아웃"이고
+# 위치도 `applicationsets/baseline/` 이 아니다. 그 디렉토리의 계약은 "전 클러스터 팬아웃"이고
 # 이것은 hub 단일이다. seed 산출물인 argocd-values.yaml 과 **같은 자리**에 둔다.
 # ⚠️ root App 의 `include` 가 이 파일을 경로로 명시한다(bootstrap/root-app.yaml). 옮기면
 #    그 목록도 같이 고쳐야 root App 이 계속 흡수한다.
