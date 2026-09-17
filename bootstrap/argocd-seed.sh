@@ -232,8 +232,7 @@ if (( ! DRY_RUN )) && want 5; then
         kubectl -n $ARGOCD_NAMESPACE get application root-app \\
           -o jsonpath='{.status.sync.status} {.status.health.status}{"\n"}'
 
-     3) cluster Secret 이 내장 in-cluster 를 대체했는가 / 중복인가
-        ⚠️ argo-cd v3.5.0 문서에 서술이 없어 **미검증 항목**이다.
+     3) cluster Secret 이 내장 in-cluster 를 대체했는가 (서버 항목이 하나여야 한다)
         argocd cluster list        # 또는 UI 의 Settings → Clusters
 
      4) UI 접근
