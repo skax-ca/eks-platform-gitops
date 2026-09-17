@@ -30,7 +30,7 @@ spec:
       chart: argo-cd
       # ⛔ 흡수와 차트 업그레이드를 같은 커밋에 넣지 않는다. 흡수 대상은 seed 산출물의 바이트
       #    동일 사본이어야 하고, 버전을 올리면 실패했을 때 어느 쪽이 원인인지 가를 수 없다.
-      targetRevision: 10.3.0
+      targetRevision: 10.9.1
       helm:
         # 기본값과 같지만 명시한다 — ArgoCD 는 release 이름을 Application 이름에서 가져오므로,
         #    그 결합은 이름을 바꾸는 순간 조용히 깨진다.

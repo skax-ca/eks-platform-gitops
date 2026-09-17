@@ -42,7 +42,7 @@ GitOps 저장소를 pull 하는 self-managed ArgoCD 를 부트스트랩한다.
 
 선택 환경변수
   ARGOCD_NAMESPACE      기본 argocd
-  ARGOCD_CHART_VERSION  기본 10.3.0        (정확 핀. 올릴 땐 argocd CLI 도 같이)
+  ARGOCD_CHART_VERSION  기본 10.9.1        (정확 핀. 올릴 땐 argocd CLI 도 같이)
   ARGOCD_VALUES         기본 bootstrap/argocd-values.yaml   (GITOPS_REPO_DIR 기준 상대경로)
   ARGOCD_RELEASE        기본 argocd
 
@@ -95,7 +95,7 @@ for v in GITOPS_REPO_DIR CLUSTER_DIR GH_APP_ID GH_APP_INSTALLATION_ID GH_APP_PRI
 done
 
 ARGOCD_NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
-ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.3.0}"
+ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.9.1}"
 ARGOCD_VALUES="${ARGOCD_VALUES:-bootstrap/argocd-values.yaml}"
 ARGOCD_RELEASE="${ARGOCD_RELEASE:-argocd}"
 

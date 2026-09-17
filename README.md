@@ -292,9 +292,9 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 
 | addon | chart | 버전 | namespace | 배포 방식 |
 |---|---|---|---|---|
-| `argocd`(자기 관리) | `argoproj.github.io/argo-helm` / `argo-cd` | 10.3.0 | `argocd` | seed 흡수, `automated.selfHeal: true` · `prune: false` |
+| `argocd`(자기 관리) | `argoproj.github.io/argo-helm` / `argo-cd` | 10.9.1 | `argocd` | seed 흡수, `automated.selfHeal: true` · `prune: false` |
 | `aws-load-balancer-controller` | `aws.github.io/eks-charts` | 3.5.0 | `kube-system` | baseline(전 클러스터, `environment` 라벨 존재 시 매칭) |
-| `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.0 | `kube-system` | baseline |
+| `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.1 | `kube-system` | baseline |
 | `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | baseline |
 | `kyverno` + `kyverno-policies` | `kyverno.github.io/kyverno` | 3.8.2 | `kyverno` | baseline, `CreateNamespace=true` |
 | Gateway API 표준 CRD | git repo(디렉토리) `kubernetes-sigs/gateway-api` | v1.6.2 | `kube-system`(형식상 값) | baseline. AWS 전용 Gateway CRD는 별도 addon 없이 `aws-load-balancer-controller` chart의 `crds/` 폴더가 이미 설치한다 |

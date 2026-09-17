@@ -40,7 +40,7 @@ spec:
           chart: karpenter
           # 🔑 OCI 태그가 곧 chart 버전이다 — GitHub 릴리스 태그를 보면 "태그≠Chart.yaml"
           #    함정에 걸린다. 호환성 매트릭스는 클러스터 1.35에 >= 1.9 를 요구한다.
-          targetRevision: 1.14.0
+          targetRevision: 1.14.1
           helm:
             releaseName: karpenter
             parameters:
@@ -91,7 +91,7 @@ spec:
       sources:
         - repoURL: public.ecr.aws/karpenter
           chart: karpenter
-          targetRevision: 1.14.0
+          targetRevision: 1.14.1
           helm:
             releaseName: karpenter
             parameters:
