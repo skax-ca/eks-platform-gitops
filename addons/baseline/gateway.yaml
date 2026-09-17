@@ -1,6 +1,6 @@
 # Gateway API 실사용 계층 — ①baseline addon (전 클러스터)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # 🔑 gateway-api-crds.yaml(CRD만 설치)의 다음 단계다 — 이 파일이 실제로 쓰는 리소스
 #    (GatewayClass·LoadBalancerConfiguration·Gateway)를 만든다. sync-wave를 5로 둬서 CRD가

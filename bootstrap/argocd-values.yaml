@@ -1,6 +1,6 @@
 # ArgoCD helm values — seed 0단계의 입력이자, 이후 자기 관리(self-management)의 SSOT
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
 # chart: argo-cd 10.3.0 (appVersion v3.5.0) — 정확 핀
 #
 # 자기소멸(self-superseding) 원칙이 이 파일에도 걸린다.

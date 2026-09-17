@@ -1,4 +1,4 @@
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # 이 정책은 kyverno-policies(업스트림 PSS baseline)와 별개다 — 그 Application의 source는
 #    upstream chart(kyverno-policies) 하나로 고정돼 있어 임의의 새 정책을 주입할 수 없다.

@@ -1,6 +1,6 @@
 # Karpenter NodePool/EC2NodeClass — ①baseline addon (계층 2가 소유하는 인프라 CR)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # **Karpenter 파일 2개 중 ②다** — ① 컨트롤러는 `karpenter.yaml`. 파일이 나뉜 이유는 그 헤더가
 #    갖는다. 이 CR 은 컨트롤러 차트가 동봉한 CRD 가 **선존재해야** 적용되므로 sync-wave 5 다.

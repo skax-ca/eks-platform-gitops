@@ -59,7 +59,7 @@ bootstrap/root-app.yaml      # App-of-Apps root — seed 대상. 이후 자기 �
 bootstrap/argocd-values.yaml # ArgoCD 자신의 helm values. root App include 범위 밖
 bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application. 위 values를 $values로 읽는다
 bootstrap/argocd-seed.sh     # seed 실행 스크립트. 이 저장소가 소유한다(아래 절)
-clusters/<env>/<cluster>/    # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개(O(1))
+clusters/<env>/<cluster>/    # cluster Secret. 새 클러스터 = 디렉토리 1개(O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
 addons/baseline/             # 전 클러스터 팬아웃 ApplicationSet(environment 라벨)
 addons/catalog/              # opt-in 카탈로그 — 구독한 클러스터만(addon-<name> 라벨)
@@ -114,20 +114,17 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬
 `bootstrap/root-app.yaml`은 `directory.include`에 적힌 경로만 매니페스트로 읽는다. 지금은
 `projects/`·`clusters/**/cluster-secret.yaml`·`addons/baseline/`·`addons/catalog/`·`bootstrap/`의
 두 Application 파일이다. **그 밖은 무엇이든 무시한다** — `addons/<addon>/<dir>/`의 로컬 차트와 CR
-매니페스트(전담 ApplicationSet이 따로 읽는다), `clusters/**/values.yaml`을 비롯한 helm values,
-도구 파일 전부.
+매니페스트(전담 ApplicationSet이 따로 읽는다), helm values(`bootstrap/argocd-values.yaml`), 도구
+파일 전부.
 
-이 저장소는 `exclude`와 `+argocd:skip-file-rendering` 마커를 쓰지 않는다. 둘 다 deny-list라
-저장소에 파일이 늘 때마다 **클러스터에 적용된 현재 spec**이 렌더할 범위가 넓어지고, root App은
-자기 spec을 옛 spec으로 렌더한 뒤에야 갱신하므로 옛 spec이 못 거르는 파일이 생기면 자기 갱신이
-막힌다. 마커는 판정이 파일 전체 문자열 포함 검사라 마커를 **설명하는 주석**이 있는 파일까지
-조용히 빠지는 문제가 하나 더 있다. 근거는 `iac-module-library`의
-`docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」.
+이 저장소는 `exclude`와 `+argocd:skip-file-rendering` 마커를 쓰지 않는다. 기각 근거는
+`iac-module-library`의 `docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」이 갖는다.
 
 매니페스트 디렉토리를 새로 만들면 `include`에 한 줄 더한다. 이미 있는 디렉토리 안에서 파일이
 늘고 주는 것은 `root-app.yaml`과 무관하다. ⚠️ **렌더가 깨지는 파일이 든 경로**를 `include`에
-넣으면 그 spec이 적용된 뒤부터 자기 갱신이 멈춘다. 그 파일을 고치는 커밋이 풀거나,
-`argocd-seed.sh --from 5 --to 5`로 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
+넣으면 그 spec이 적용된 뒤부터 자기 갱신이 멈춘다. root App은 자기 spec을 클러스터에 적용된
+옛 spec으로 렌더한 뒤에야 갱신하는데, 그 렌더가 깨지면 갱신에 이르지 못한다. 그 파일을 고치는
+커밋이 풀거나, `argocd-seed.sh --from 5 --to 5`로 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
 
 `addons/<addon>/<dir>/`가 helm 차트인지 평문 매니페스트인지는 **per-cluster 값을 주입하는지**로만
 정한다. ApplicationSet의 fasttemplate은 Application spec에만 적용되고 git 경로 안의 파일에는
@@ -207,7 +204,7 @@ staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종�
 APF 같은 기술적 강제도 없다.
 
 - 순서: Terraform 쪽 Pod Identity association을 `kube-system/cluster-autoscaler`로 **먼저** 고정
-  (관례로 선택, `iac-module-library` `docs/architectures/eks-gitops-hub-spoke/choose-your-path.md` 참조) → 이 매니페스트가 거기 맞춤.
+  (관례로 고른 값이고 공식 근거는 없다) → 이 매니페스트가 거기 맞춤.
 - 즉 위 근거 3(집행 장치)과 인과가 반대다 — association이 원인이 아니라 결과다.
 - 그래서 근거 3과 같은 층으로 세지 않고 정직하게 **약한 예외**로 남겨 둔다. 새 예외를 추가할 때 이
   항목을 전례로 들지 않는다.

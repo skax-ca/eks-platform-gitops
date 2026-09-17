@@ -1,6 +1,6 @@
 # Gateway API 표준 CRD — ①baseline addon (전 클러스터)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # 🔑 컨트롤러가 아니라 **CRD만** 설치하는 addon이다. 실제 트래픽을 만드는 컨트롤러는 이미 있는
 #    `aws-load-balancer-controller.yaml`(chart 3.5.0 = appVersion v3.5.0)이 — GA 요구 최소버전

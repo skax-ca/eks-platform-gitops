@@ -1,6 +1,6 @@
 # Kyverno PSS 정책 — ①baseline addon (업스트림 kyverno-policies 차트, ClusterPolicy 11개)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # **Kyverno 파일 3개 중 ②다** — ① 엔진은 `kyverno.yaml`, ③ 커스텀 정책은
 #    `kyverno-custom-policies.yaml`. 파일이 나뉜 이유와 승격 순서는 `kyverno.yaml` 헤더가 갖는다.

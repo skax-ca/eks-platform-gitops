@@ -1,6 +1,6 @@
 # 플랫폼 AppProject — 계층 2(플랫폼 GitOps)의 가드레일
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
 # seed 순서 3단계 — 4·5단계(cluster Secret·root App)가 이 프로젝트를 참조하므로 반드시 먼저.
 #
 # ⚠️ ArgoCD 의 `default` AppProject 는 sourceRepos/destinations/clusterResourceWhitelist 가

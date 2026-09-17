@@ -1,6 +1,6 @@
 # Karpenter 컨트롤러 — ①baseline addon (노드 오토프로비저너. 차트가 CRD 를 동봉한다)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # **Karpenter 는 파일 2개다.** 컴포넌트로 나누고 **티어는 한 파일에 붙여 둔다** — 승격할 때
@@ -94,7 +94,6 @@ spec:
         helm:
           # Application 이름({{name}}-karpenter)과 release 이름을 분리한다 — 근거는
           # aws-load-balancer-controller.yaml과 같다.
-          # 계약: iac-module-library docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
           releaseName: karpenter
           parameters:
             # 이 값이 없으면 helm template 이 실패한다:

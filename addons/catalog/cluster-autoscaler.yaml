@@ -1,6 +1,6 @@
 # Cluster Autoscaler — ②opt-in 카탈로그 addon (managed_node_groups 오토스케일링)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT). taint 병행 전략 자체는
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md. taint 병행 전략 자체는
 #       skax-ca/eks-reference-infra의 `docs/runbooks.md` 「Karpenter + Cluster Autoscaler
 #       동시 운영: taint 전략」절이 갖는다(운영 절차 SSOT는 그 repo다).
 #
@@ -30,10 +30,8 @@
 #    달리 이 예외는 "공식 문서가 요구해서"가 아니다.
 #
 #    **정직한 근거**: Terraform 쪽 Pod Identity association 이 이미 `kube-system/
-#    cluster-autoscaler` 로 고정되어 있다(`enable_cluster_autoscaler` 설계 시 사용자가 관례로
-#    선택 — `iac-module-library`
-#    `docs/architectures/eks-gitops-hub-spoke/choose-your-path.md` 참조, 그 문서도 "공식 근거
-#    없음"을 그대로 적어 뒀다). ALBC 의 예외(공식 문서 → association)와 인과가 반대다 —
+#    cluster-autoscaler` 로 고정되어 있다(관례로 고른 값이고 공식 근거는 없다).
+#    ALBC 의 예외(공식 문서 → association)와 인과가 반대다 —
 #    association 을 먼저 kube-system 으로 만든 뒤 이 매니페스트가 거기 맞추는 것이라, 이 이유를
 #    "근거 3"(집행 장치)과 같은 층으로 세지 않는다. **지금 바꾸려면 두 저장소(Terraform
 #    association + 이 매니페스트)를 함께 고쳐야 한다**는 사실만 정직하게 남긴다.
@@ -79,8 +77,7 @@ spec:
         targetRevision: 9.59.0
         helm:
           # Application 이름({{name}}-cluster-autoscaler)과 release 이름을 분리한다 —
-          # 이 addon이 DNS-1123 63자 제한에 실제로 걸려 이름이 잘렸던 사례가 이 결정의 근거다.
-          # 계약: iac-module-library docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
+          # 접두사가 붙은 이름은 DNS-1123 63자 제한에 걸려 잘리고, 잘린 이름끼리 충돌한다.
           releaseName: cluster-autoscaler
           parameters:
             # autoDiscovery.tags 기본값이 이미

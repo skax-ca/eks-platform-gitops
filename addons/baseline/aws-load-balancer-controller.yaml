@@ -1,6 +1,6 @@
 # AWS Load Balancer Controller — ①baseline addon (전 클러스터)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # 이 파일은 **클러스터 수와 무관하게 불변**이다. 새 클러스터 = cluster Secret 1개 추가로 끝난다.
 #    per-cluster 값은 전부 cluster Secret 의 **라벨**에서 끌어온다.
@@ -78,7 +78,6 @@ spec:
         helm:
           # Application 이름({{name}}-aws-lbc)과 release 이름을 분리한다 — release 이름이
           # 없으면 그대로 리소스 이름에 전파돼 63자 제한에 걸릴 수 있다.
-          # 계약: iac-module-library docs/architectures/eks-gitops-hub-spoke/choose-your-path.md
           releaseName: aws-lbc
           parameters:
             # ALBC 필수 — 실제 EKS 클러스터명이어야 한다.

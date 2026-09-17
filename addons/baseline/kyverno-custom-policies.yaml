@@ -1,6 +1,6 @@
 # Kyverno 커스텀 정책 — ①baseline addon (이 저장소가 직접 소유하는 ClusterPolicy)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # **Kyverno 파일 3개 중 ③이다** — ① 엔진은 `kyverno.yaml`, ② PSS 정책은
 #    `kyverno-policies.yaml`. 파일이 나뉜 이유는 `kyverno.yaml` 헤더가 갖는다.
@@ -51,8 +51,8 @@ spec:
     spec:
       project: platform
       source:
-        # 이 저장소가 직접 소유하는 정책 — 평문 매니페스트 디렉토리다. root-app 의 include
-        # 범위 밖이라 root App 이 이 파일을 읽을 일이 없다.
+        # 이 저장소가 직접 소유하는 정책 — 평문 매니페스트 디렉토리다. 그 디렉토리는 root-app 의
+        # include 범위 밖이라 root App 이 정책 파일을 읽을 일이 없다.
         repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/kyverno/custom-policies

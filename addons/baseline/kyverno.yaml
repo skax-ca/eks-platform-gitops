@@ -1,6 +1,6 @@
 # Kyverno 엔진 — ①baseline addon (정책 엔진. 차트가 CRD 22개를 동봉한다)
 #
-# 설계: skax-ca/iac-module-library의 docs/ (소비 경로 규약 SSOT)
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 #
 # **①baseline 인 이유**: 정책 엔진은 **가드레일**이고, **옵트인 가드레일은 가드레일이
 #    아니다.** ALBC·Karpenter 와 같은 층에 둔다.
