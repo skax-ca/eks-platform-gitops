@@ -44,7 +44,7 @@ spec:
           # ⛔ 3.8 라인으로 되돌리지 않는다. 이 엔진이 쓰는 정책 타입은 CEL 기반
           #    policies.kyverno.io/ValidatingPolicy 이고, legacy kyverno.io 타입(ClusterPolicy·
           #    Policy·CleanupPolicy·PolicyException)은 v1.19 에서 deprecated, v1.20 에서 제거된다.
-          #    AppProject 의 whitelist 와 커스텀 정책이 이미 새 kind 라 되돌리면 셋이 함께 어긋난다.
+          #    AppProject 의 whitelist 와 커스텀 정책이 새 kind 를 쓰므로 되돌리면 셋이 함께 어긋난다.
           targetRevision: 3.9.1
           helm:
             valueFiles:

@@ -80,8 +80,8 @@ spec:
     #    통과하고 두 번째 클러스터에서만 깨진다.
     - { group: "", kind: Namespace }
     # Kyverno 가 배포하는 정책 CR — 업스트림 PSS 11개와 우리 커스텀 정책이 같은 kind 다.
-    #    ⛔ legacy kyverno.io/ClusterPolicy 를 여기 두지 않는다. Kyverno 가 그 타입을 제거해
-    #       만들 수 있는 리소스가 아니고, 남겨두면 쓰이지 않는 권한만 열어 둔 것이 된다.
+    #    ⛔ legacy kyverno.io/ClusterPolicy 를 여기 두지 않는다. Kyverno v1.20 이 그 타입을 지워
+    #       만들 수 없는 리소스가 되고, 남겨두면 쓰이지 않는 권한만 열어 두는 셈이다.
     #    ⚠️ Kyverno 의 ValidatingWebhookConfiguration 은 렌더 결과에 없다 — 컨트롤러가 런타임에
     #       동적 등록하므로 ArgoCD 가 소유하지 않는다. 뒤집으면 웹훅이 잘못돼도 Application 은
     #       Synced Healthy 로 보인다는 뜻이다.
