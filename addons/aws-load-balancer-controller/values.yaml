@@ -4,13 +4,16 @@
 # 팬아웃 시점에 정해지는 값(clusterName·vpcTags.Name)은 여기 없다.
 #    applicationsets/baseline/aws-load-balancer-controller.yaml 의 helm.parameters 가 넘긴다.
 
-# system 관리형 노드그룹의 workload-class=system NoSchedule taint 를 넘는다.
+# system 관리형 노드그룹의 CriticalAddonsOnly=true:NoSchedule taint 를 넘는다.
 #    Karpenter 가 아직 없는 부트스트랩 시점에는 system 2노드가 유일한 스케줄 대상이다.
+#    ⚠️ 고정이 아니라 허용이다. nodeSelector 를 주지 않으므로 Karpenter 노드가 생긴 뒤에는 어느
+#    쪽에 있어도 된다.
 #    차트의 top-level 키다(argo-cd 차트의 global.tolerations 와 달리 여기는 이 이름 그대로다).
+#    ⚠️ 차트 기본값이 비어 있어 직접 쓴다. coredns·Karpenter 처럼 기본값에 기댈 수 없다.
 tolerations:
-  - key: workload-class
+  - key: CriticalAddonsOnly
     operator: Equal
-    value: system
+    value: "true"
     effect: NoSchedule
 # Pod Identity 바인딩 대상. IRSA 애노테이션은 불필요하다 — association 이 이미 있다.
 serviceAccount:

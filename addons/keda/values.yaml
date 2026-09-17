@@ -5,14 +5,15 @@
 # system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations). 차트 최상위의 이 두
 #    키가 operator·metricsServer·webhooks 3개 컴포넌트 전부에 적용된다.
 #    ⚠️ 차트 기본값에는 스케줄링 제약이 없어 그대로 두면 3개 파드가 Karpenter 의 spot 노드로
-#    밀려난다. 다른 컨트롤러는 전부 system 고정이라 이것만 spot 에 두면, 노드 회수 때 operator 와
-#    webhook 이 동시에 죽어 오토스케일링 정지와 ScaledObject CRUD 차단이 함께 온다.
+#    밀려난다. 노드 회수 때 operator 와 webhook 이 동시에 죽으면 오토스케일링 정지와
+#    ScaledObject CRUD 차단이 함께 온다. 그래서 허용(toleration)에서 멈추지 않고 nodeSelector 로
+#    고정한다 — ALBC·Kyverno·ArgoCD 가 허용만 받는 것과 갈리는 지점이다.
 nodeSelector:
   workload-class: system
 tolerations:
-  - key: workload-class
+  - key: CriticalAddonsOnly
     operator: Equal
-    value: system
+    value: "true"
     effect: NoSchedule
 
 # 기본값을 유지하는 것 — 판단의 기록:

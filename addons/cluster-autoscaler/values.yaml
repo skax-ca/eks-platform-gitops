@@ -22,15 +22,16 @@ affinity:
             - key: karpenter.sh/nodepool
               operator: DoesNotExist
 
-# system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations) —
-# eks-reference-infra `docs/runbooks.md`의 「Karpenter + Cluster Autoscaler 동시 운영: taint
-# 전략」절과 같은 형태(coredns·metrics-server 와 동일 패턴). 위 negative affinity 는 "Karpenter
-# 노드는 안 됨"만 막고 "system 노드로 가라"는 강제하지 않으므로 nodeSelector 가 따로 필요하다.
-# 차트 기본값은 둘 다 비어 있다.
+# system 노드그룹으로 끌어당기고(nodeSelector) taint 를 통과한다(tolerations). 설정표는
+# eks-reference-infra `docs/runbooks.md` 의 「노드 배치」 절이 갖는다. 위 negative affinity 는
+# "Karpenter 노드는 안 됨"만 막고 "system 노드로 가라"는 강제하지 않으므로 nodeSelector 가 따로
+# 필요하다.
+# ⚠️ 차트 기본값이 셋 다 비어 있어 전부 직접 쓴다. Karpenter 차트가 같은 보호를 기본값으로
+#    갖는 것과 갈리는 지점이다.
 nodeSelector:
   workload-class: system
 tolerations:
-  - key: workload-class
+  - key: CriticalAddonsOnly
     operator: Equal
-    value: system
+    value: "true"
     effect: NoSchedule

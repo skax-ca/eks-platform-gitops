@@ -9,14 +9,16 @@
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
 
-# system 노드그룹의 workload-class=system NoSchedule taint 를 전 컴포넌트가 넘게 한다.
+# system 노드그룹의 CriticalAddonsOnly=true:NoSchedule taint 를 전 컴포넌트가 넘게 한다.
 #   ⚠️ 차트 기본값은 tolerations 가 전부 비어 있어 이 taint 를 모른다. 컴포넌트별 tolerations 키가
 #      전부 global.tolerations 로 떨어지므로 여기 하나면 전체에 적용된다.
+#   ⚠️ 고정이 아니라 허용이다. nodeSelector 를 주지 않으므로 Karpenter 노드가 생긴 뒤에는 어느
+#      쪽에 있어도 된다.
 global:
   tolerations:
-    - key: workload-class
+    - key: CriticalAddonsOnly
       operator: Equal
-      value: system
+      value: "true"
       effect: NoSchedule
 
 # dex 를 끈다. OIDC 직결이면 불필요하고, 켜 두면 쓰지 않는 파드가 하나 도는 죽은 경로가 된다.

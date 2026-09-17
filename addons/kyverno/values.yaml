@@ -3,14 +3,14 @@
 # 차트 기본값을 그대로 받고 스케줄 전제 하나만 넘긴다. 기본값과 다른 것만 적는다.
 
 # ⚠️ tolerations 하나만 넘긴다. 이 값은 **스케줄 전제**라, 기능적 기본값은 차트 것을 그대로
-#    받는다는 결정 안에 있다. system 관리형 노드그룹의 workload-class=system NoSchedule taint
+#    받는다는 결정 안에 있다. system 관리형 노드그룹의 CriticalAddonsOnly=true:NoSchedule taint
 #    때문에 컨트롤러 4종(admission·background·cleanup·reports)이 전부 Pending 이 된다.
 #    차트의 top-level global.tolerations 가 4종 전부에 전파된다.
 global:
   tolerations:
-    - key: workload-class
+    - key: CriticalAddonsOnly
       operator: Equal
-      value: system
+      value: "true"
       effect: NoSchedule
 
 # 기본값을 유지하는 것 — 판단의 기록:

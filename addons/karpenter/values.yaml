@@ -3,18 +3,6 @@
 # 팬아웃 시점에 정해지는 값(settings.clusterName·settings.interruptionQueue)은 여기 없다.
 #    applicationsets/baseline/karpenter.yaml 의 helm.parameters 가 넘긴다.
 
-# system 관리형 노드그룹의 workload-class=system NoSchedule taint 를 넘는다.
-#    Karpenter 자신이 부트스트랩 문제다: Karpenter 가 없으면 non-system 노드가 생기지 않고, 그
-#    노드가 없으면 system 2노드가 유일한 스케줄 대상이라 Karpenter 도 여기서 시작해야 한다.
-#    ⚠️ 이 차트만 tolerations 기본값이 비어 있지 않다(CriticalAddonsOnly: Exists). helm 은 리스트를
-#    병합하지 않고 통째로 갈아치우므로 이 블록이 그 기본 toleration 을 **지운다**. 지금 이 배포의
-#    노드그룹에는 CriticalAddonsOnly taint 가 없어 무해하지만, 그 taint 를 쓰는 노드를 들이면
-#    Karpenter 가 거기 못 뜬다 — 그때는 이 목록에 두 항목을 다 적는다.
-tolerations:
-  - key: workload-class
-    operator: Equal
-    value: system
-    effect: NoSchedule
 # Pod Identity 바인딩 대상(kube-system/karpenter). IRSA 애노테이션 불필요.
 serviceAccount:
   create: true
@@ -22,3 +10,12 @@ serviceAccount:
 
 # 기본값을 유지하는 것 — 판단의 기록:
 #  · replicas: 2(차트 기본). leader election HA 이고 노드 2개짜리 환경에 그 이상은 의미가 없다.
+#  · 🔑 스케줄링 제약을 하나도 쓰지 않는다. 이 차트는 tolerations 기본값이
+#    CriticalAddonsOnly: Exists 라 시스템 노드그룹의 taint 를 그대로 넘고, affinity 기본값
+#    karpenter.sh/nodepool DoesNotExist 가 자기 노드를 배제한다. 부트스트랩이 성립하는 것도
+#    그래서다 — Karpenter 가 없으면 non-system 노드가 생기지 않으므로 Karpenter 자신은 시스템
+#    노드그룹에서 시작해야 한다.
+#    ⚠️ helm 은 리스트를 병합하지 않고 통째로 갈아치운다. 여기 tolerations 를 적는 순간 그
+#    기본값이 사라지므로, 적어야 할 이유가 생기면 CriticalAddonsOnly 항목을 함께 적는다.
+#    ⚠️ affinity 기본값은 "Karpenter 노드는 안 된다"만 말한다. 관리형 노드그룹이 둘 이상이 되면
+#    시스템 노드그룹으로 고정되지 않으므로 그때 nodeSelector 를 명시한다.
