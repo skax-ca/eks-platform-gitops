@@ -1,7 +1,6 @@
 # Kyverno 엔진 차트 values — kyverno-prd·kyverno-nonprd 두 ApplicationSet 이 같은 파일을 읽는다
 #
 # 차트 기본값을 그대로 받고 스케줄 전제 하나만 넘긴다. 기본값과 다른 것만 적는다.
-# 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
 
 # ⚠️ tolerations 하나만 넘긴다. 이 값은 **스케줄 전제**라, 기능적 기본값은 차트 것을 그대로
 #    받는다는 결정 안에 있다. system 관리형 노드그룹의 workload-class=system NoSchedule taint

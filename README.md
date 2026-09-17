@@ -134,6 +134,34 @@ ApplicationSet이, `values.yaml`은 multi-source가 따로 읽는다), `bootstra
 적용되지 않으므로, cluster generator의 값을 CR에 넣으려면 helm이 필요하다(`shared-gateway`·
 `karpenter/nodepool`). 주입할 값이 없으면 평문이다(`kyverno/custom-policies`).
 
+## ApplicationSet 공통 규약
+
+매니페스트마다 반복하지 않고 여기 한 번 적는다. 개별 파일 주석은 그 파일에만 참인 것만 갖는다.
+
+| 항목 | 규약 |
+|---|---|
+| 팬아웃 | cluster generator가 라벨이 맞는 cluster Secret마다 Application을 1개 만든다. ArgoCD 내장 `in-cluster`에는 Secret도 라벨도 없어 걸리지 않는다 — cluster Secret을 명시적으로 만드는 이유다 |
+| `finalizers` | `resources-finalizer.argocd.argoproj.io`를 template에 둔다. 없으면 Application CR을 지워도 그것이 만든 리소스가 클러스터에 orphan으로 남는다 |
+| `releaseName` | Application 이름과 분리한다. 없으면 `{{name}}-<addon>`이 리소스 이름에 전파돼 63자 제한에 걸린다 |
+| `ref: values` source | `ref`만 있고 `path`/`chart`가 없어 렌더 대상이 아니다. `$values`가 이 저장소 루트를 가리키게 하는 것이 전부다 |
+
+⚠️ **돌고 있는 클러스터가 있을 때 ApplicationSet 이름을 바꾸지 않는다.** 이름이 바뀌면 삭제로
+처리되고, 그것이 만든 Application이 `ownerReference`를 따라 지워지면서 finalizer가 **실물까지
+prune한다.** 정리할 수 있는 시점은 전면 철거 이후 seed 이전뿐이다.
+
+### staged 전파 — `-prd` · `-nonprd` 두 블록
+
+한 파일 안에 티어별 ApplicationSet 두 개를 둔다. 승격할 때 두 `targetRevision`을 나란히 읽어야
+하기 때문이고, 그 차이가 승격이 어디까지 갔는지를 저장소에 기록한다. 다르면 진행 중, 같으면 끝난
+것이다. 티어를 나누지 않는 addon(`uniform`)은 블록이 하나다.
+
+⛔ **두 블록을 함께 고친다.** 갈려도 되는 값은 `targetRevision` 하나다. values는 양 블록이 같은
+파일을 읽어 갈릴 수 없고, `parameters`·네임스페이스·`syncPolicy`는 갈리면 티어 간 동작이 달라진다.
+
+⚠️ 그 티어의 클러스터가 없으면 대상이 0개가 된다. 사고가 아니라 **빈 슬롯**이고, cluster Secret이
+그 `tier`로 등록되는 순간 팬아웃된다. ArgoCD는 대상 0개를 오류로 보고하지 않으므로, 0이 의도인지
+사고인지는 등록된 cluster Secret의 `tier` 값을 세어 구분한다.
+
 ## helm values — `addons/<addon>/values.yaml`
 
 저장소가 이미 아는 값(tolerations · serviceAccount · replicas)은 `addons/<addon>/values.yaml`에 두고, ApplicationSet이 multi-source의
@@ -197,6 +225,21 @@ staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종�
 - ⚠️ **cluster Secret의 `project` 필드 주의** — 값을 지정하면 그 프로젝트에서만 쓸 수 있는
   project-scoped cluster가 된다. `platform`과 어긋나면 클러스터가 `unknown`으로 뜨는데 증상이
   원인을 가리키지 않는다.
+
+### cluster Secret 라벨 계약
+
+ApplicationSet이 읽는 라벨이다. 빠지면 그 addon만 조용히 안 뜬다.
+
+| 라벨 | 읽는 쪽 | 값 |
+|---|---|---|
+| `environment` | baseline 팬아웃 전체 | `hub` · `dev` 등. 존재 자체가 매칭 조건이다 |
+| `tier` | staged addon의 `-prd`/`-nonprd` 선택 | `prd` \| `nonprd` |
+| `vpcName` | ALBC의 `vpcTags.Name` | VPC의 Name 태그 |
+| `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름. 26자 hash 접미가 붙어 **재구축마다 바뀐다** |
+| `addon-<name>: enabled` | catalog addon 구독 | `addon-keda` · `addon-cluster-autoscaler` |
+
+⚠️ **teardown은 매칭 라벨을 먼저 뗀 뒤 Secret을 지운다.** git 이력의 마지막 cluster-secret을 그대로
+되살리면 라벨이 빠진 껍데기이고, 그 상태로는 Application이 하나도 생기지 않는다.
 - ⚠️ **`sourceRepos`는 제3 가드레일이다** — Application의 `repoURL`이 여기 없으면
   `InvalidSpecError`로 sync 자체가 안 선다. addon을 추가할 때마다 그 chart repo를 추가한다.
 - ⚠️ **`clusterResourceWhitelist`는 `[]`로 시작한다** — addon마다 그 addon이 실제로 만드는 kind만

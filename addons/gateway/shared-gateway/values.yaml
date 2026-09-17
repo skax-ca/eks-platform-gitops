@@ -4,18 +4,13 @@
 #    (GatewayClass·LoadBalancerConfiguration·Gateway) 중 실제로 참조하는 곳이 없다.
 environment: ""
 
-# 내부 전용 — live/hub/networking main.tf 의 elb-uniq(internal-elb 태그, isolated 서브넷)로
-# 자동 탐색된다. 이 클러스터 API 엔드포인트·workbench 접근이 전부 private인 것과 같은 기조다.
-# 외부 노출이 필요해지면 이 값을 internet-facing 으로 바꾼다 — 그러면 pub-uniq(elb 태그)
-# 서브넷으로 자동 탐색이 넘어간다(서브넷 ID를 직접 지정하지 않는다).
+# 내부 전용. internal-elb 태그가 붙은 isolated 서브넷으로 자동 탐색된다 — 클러스터 API
+# 엔드포인트·workbench 접근이 전부 private 인 것과 같은 기조다. 외부 노출이 필요하면 이 값을
+# internet-facing 으로 바꾼다. 그러면 탐색이 public 서브넷으로 넘어간다(서브넷 ID 를 직접 쓰지 않는다).
 scheme: internal
 
-# 🔴 빈 배열 — 의도적으로 아무 CIDR도 허용하지 않는다. ALBC 소스(model_build_security_group.go)
-#    확인: sourceRanges가 nil이면(필드 자체를 안 쓰면) 기본값 0.0.0.0/0·::/0로 열리지만,
-#    **빈 배열을 명시하면** 그 값이 기본값을 덮어써서 인바운드 규칙이 0개가 된다(SG는 만들어지되
-#    아무도 못 들어옴). 지금은 HTTPRoute도 백엔드도 없어 실제 호출자가 누구인지 모른다 — CIDR을
-#    추측해서 미리 열어두지 않는다(GatewayClass·Gateway를 첫 소비자 전까지 안 만들던 것과 같은
-#    판단, 이번엔 "만들되 접근은 안 연다"는 차이만 있다). 앱팀이 실제로 필요해지면 이 배열에
-#    CIDR을 추가하는 PR로 요청한다 — 이 파일 하나만 바뀌고 Gateway·GatewayClass 구조는
-#    그대로다.
+# ⚠️ 빈 배열과 nil 은 뜻이 다르다. 필드를 안 쓰면 ALBC 가 0.0.0.0/0·::/0 으로 열지만, 빈 배열을
+#    명시하면 그 기본값을 덮어써 인바운드 규칙이 0개가 된다(SG 는 만들어지되 아무도 못 들어온다).
+#    호출자가 정해지기 전까지 CIDR 을 추측해서 미리 열어두지 않는다. 앱팀이 필요해지면 이 배열에
+#    CIDR 을 더하는 변경 하나로 끝나고 Gateway·GatewayClass 구조는 그대로다.
 sourceRanges: []

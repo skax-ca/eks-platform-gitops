@@ -2,7 +2,6 @@
 #
 # 팬아웃 시점에 정해지는 값(settings.clusterName·settings.interruptionQueue)은 여기 없다.
 #    applicationsets/baseline/karpenter.yaml 의 helm.parameters 가 넘긴다.
-# 이 파일의 주석은 렌더 결과에도 Application spec 에도 들어가지 않는다.
 
 # system 관리형 노드그룹의 workload-class=system NoSchedule taint 를 넘는다.
 #    Karpenter 자신이 부트스트랩 문제다: Karpenter 가 없으면 non-system 노드가 생기지 않고, 그

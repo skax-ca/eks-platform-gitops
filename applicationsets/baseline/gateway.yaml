@@ -1,27 +1,15 @@
-# Gateway API 실사용 계층 — ①baseline addon (전 클러스터)
+# Gateway API 실사용 계층 — baseline addon. GatewayClass·LoadBalancerConfiguration·Gateway 를 만든다.
+#
+# CRD 는 gateway-api-crds.yaml 이 먼저 깐다. sync-wave 5 인 이유다.
+# ⛔ HTTPRoute·백엔드 Service 는 여기 없다 — 계층 3(앱 GitOps)은 이 저장소 범위 밖이다. 앱팀이
+#    이 Gateway 를 parentRefs 로 참조하는 HTTPRoute 를 자기 저장소에 만든다.
+# ⚠️ 이 리소스가 적용되는 순간 실제 ALB 가 생성된다(과금 시작). HTTPRoute 유무와 무관하다.
+# ⚠️ ALBC 는 Gateway API CRD 존재 여부를 파드 시작 시점에만 감지하고 캐싱한다. 이미 떠 있던 ALBC 가
+#    있는 클러스터에 CRD 를 나중에 깔면 GatewayClass 가 Accepted=Unknown 인 채로 조용히 멈춘다 —
+#    에러가 아니다. `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`
+#    로 푼다. 신규 클러스터는 CRD 설치 후 ALBC 가 처음 뜨므로 해당하지 않는다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
-#
-# 🔑 gateway-api-crds.yaml(CRD만 설치)의 다음 단계다 — 이 파일이 실제로 쓰는 리소스
-#    (GatewayClass·LoadBalancerConfiguration·Gateway)를 만든다. sync-wave를 5로 둬서 CRD가
-#    먼저 존재하게 한다(Karpenter의 컨트롤러(wave 0)→NodePool(wave 5) 패턴과 같은 이유).
-#
-# ⛔ HTTPRoute·백엔드 Service는 여기 없다 — 계층 3(앱 GitOps)은 이 저장소 범위 밖이다
-#    (README "이 저장소가 다루는 것 / 다루지 않는 것" 참조, ⛔ apps/ 디렉토리는 의도적으로 없다).
-#    앱팀은 이 Gateway를 parentRefs로 참조하는 HTTPRoute를 **자기 저장소**에 만든다.
-#
-# ⚠️ 이 리소스가 적용되는 순간 실제 ALB가 AWS에 생성된다(과금 시작) — HTTPRoute 유무와 무관하다.
-#    근거·scheme(internal) 판단은 addons/gateway/shared-gateway/values.yaml 헤더 참조.
-#
-# 🔴 **ALBC는 Gateway API CRD 존재 여부를 파드 시작 시점에만 감지하고, 그 결과를 캐싱한다.**
-#    이미 오래 떠 있던 ALBC 파드가 있는 클러스터에 gateway-api-crds.yaml을 이 파일보다 나중에
-#    처음 추가하는 경우, ALBC 시작 로그에 "Disabling ALBGatewayAPI: missing required CRDs"가
-#    남아있다면 CRD가 생겨도 재감지하지 않는다 — GatewayClass가 계속 Accepted=Unknown,
-#    Gateway가 ADDRESS 없이 멈춘 채로 보인다(에러가 아니라 조용한 정체). 대응:
-#    `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`
-#    (hub에서 재현·해결 확인). 신규 클러스터라면 CRD 설치 후 ALBC가 처음 뜨므로 이 문제
-#    자체가 없다 — hub·dev 최초 구축 순서(TGW→networking→EKS+workbench→GitOps seed)에서는
-#    이 addon이 이미 baseline에 포함된 채로 처음 seed되므로 해당하지 않는다.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -29,7 +17,6 @@ metadata:
   namespace: argocd
 spec:
   generators:
-    # 다른 baseline addon과 동일한 cluster generator — 근거는 aws-load-balancer-controller.yaml 헤더 참조.
     - clusters:
         selector:
           matchExpressions:
@@ -41,14 +28,13 @@ spec:
       finalizers:
         - resources-finalizer.argocd.argoproj.io
       annotations:
-        # gateway-api-crds(wave 0, 기본값)보다 반드시 뒤에 적용되게 한다. ⚠️ wave는 생성 순서만
-        # 정할 뿐 그 sync의 완료를 기다리지 않는다 — 실제 안전장치는 아래 SkipDryRunOnMissingResource다.
+        # CRD 보다 뒤에 적용되게 한다. ⚠️ wave 는 생성 순서만 정할 뿐 그 sync 의 완료를 기다리지
+        # 않는다 — 실제 안전장치는 아래 SkipDryRunOnMissingResource 다.
         argocd.argoproj.io/sync-wave: "5"
     spec:
       project: platform
       source:
-        # 이 저장소의 로컬 helm 차트다 — 이유는 addons/gateway/shared-gateway/Chart.yaml 참조.
-        # 이 경로는 root-app 의 include 범위 밖이라 root App 이 차트 파일을 읽을 일이 없다.
+        # 이 저장소의 로컬 helm 차트다 — per-cluster 값을 주입해야 해서 평문이 아니다.
         repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/gateway/shared-gateway
@@ -58,8 +44,6 @@ spec:
               value: '{{metadata.labels.environment}}'
       destination:
         server: '{{server}}'
-        # 전용 ns 신설 — 이 repo 기본 규칙. ALBC·Karpenter의 kube-system 예외에 안 낀다
-        # (그 둘의 근거인 APF FlowSchema·Pod Identity association이 이 addon엔 없다).
         namespace: gateway-system
       syncPolicy:
         automated:
@@ -67,7 +51,6 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-          # gateway-api-crds가 막 만든 CRD 직후의 첫 sync에서 dry-run이 실패하는 것을 피한다
-          # (Karpenter NodePool과 같은 이유).
+          # CRD 가 막 생긴 직후의 첫 sync 에서 dry-run 이 실패하는 것을 피한다.
           - SkipDryRunOnMissingResource=true
           - ServerSideApply=true

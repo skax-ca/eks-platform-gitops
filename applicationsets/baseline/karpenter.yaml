@@ -1,78 +1,30 @@
-# Karpenter 컨트롤러 — ①baseline addon (노드 오토프로비저너. 차트가 CRD 를 동봉한다)
+# Karpenter 컨트롤러 — baseline addon. CR(NodePool/EC2NodeClass)은 karpenter-nodepool.yaml.
+#
+# 네임스페이스가 kube-system 인 근거는 README 「addon 네임스페이스 규칙」이 갖는다. 새 addon에
+#    이 값을 복사하지 않는다 — 전용 ns 신설이 기본 규칙이고 이 파일은 예외다.
+# ⚠️ CR 쪽은 티어를 나누지 않아 양 티어가 같은 차트를 본다. 이 파일의 승격이 진행 중이면
+#    그 차트가 두 CRD 버전 모두에서 유효해야 한다(karpenter-nodepool.yaml 헤더).
+# Terraform 전제: 컨트롤러·노드 IAM role, 중단 SQS `Karpenter-<cluster>`, Pod Identity
+#    association `kube-system/karpenter`, 노드 SG의 `karpenter.sh/discovery` 태그.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
-#
-# ─────────────────────────────────────────────────────────────────────────────
-# **Karpenter 는 파일 2개다.** 컴포넌트로 나누고 **티어는 한 파일에 붙여 둔다** — 승격할 때
-#    두 `targetRevision` 을 나란히 읽어야 하기 때문이다(그 차이가 승격 지점의 기록이다).
-#
-#    · karpenter.yaml (이 파일)   ① 컨트롤러 helm. NodePool/NodeClaim/EC2NodeClass CRD 동봉
-#                                   (sync-wave 0) staged ⇒ `-prd` · `-nonprd` 두 블록
-#    · karpenter-nodepool.yaml    ② CR(NodePool/EC2NodeClass). 그 CRD 가 **선존재해야** 적용된다
-#                                   (sync-wave 5) uniform ⇒ `main` 핀이라 나눌 버전이 없다
-#
-#    ⚠️ ②가 나뉘지 않으므로 **양 티어가 같은 CR 차트를 본다.** 이 파일의 승격이 진행 중일 때
-#       그 차트는 두 CRD 버전 모두에서 유효해야 한다(상세는 karpenter-nodepool.yaml 헤더).
-# ─────────────────────────────────────────────────────────────────────────────
-#
-# 네임스페이스 = **kube-system** — 이 repo의 네임스페이스 규칙(전용 ns 신설)의 **예외 2개 중
-#    하나**다(다른 하나는 ALBC). 이 repo의 기본 규칙은 "계층 2 addon은 전용 네임스페이스를
-#    신설한다"이고, ALBC·Karpenter만 예외다. 새 addon을 이 파일에서 복사할 때 **이 줄을 함께
-#    가져가지 말 것.**
-#
-#    **이 예외의 기술적 근거는 Karpenter 가 갖고 있다 — APF(API Priority & Fairness) 다.**
-#    Karpenter 공식 문서 원문:
-#      "By default, Karpenter is installed into the kube-system namespace, which leverages the
-#       system-leader-election and kube-system-service-accounts FlowSchemas to map calls from the
-#       kube-system namespace to the leader-election and workload-high PriorityLevelConfigurations…
-#       If you install Karpenter in a different namespace than the default kube-system namespace,
-#       Karpenter will not be put into these higher-priority FlowSchemas by default. Instead, you
-#       will need to create custom FlowSchemas."
-#    ⇒ 전용 ns 로 옮기면 **apiserver 가 스로틀링될 때 Karpenter 가 우선순위 버킷에서 빠져 굶는다.**
-#       우회하려면 공식 스크립트의 FlowSchema 2개(karpenter-leader-election precedence 200 +
-#       karpenter-workload precedence 1000, apiGroups '*' · clusterScope true · verbs '*')를
-#       **우리가 소유하고 upstream 변경을 따라가야** 한다. cluster-scoped 리소스가 2개 늘고
-#       AppProject whitelist 에 flowcontrol.apiserver.k8s.io/FlowSchema 도 열어야 한다.
-#
-#    ⛔ **근거로 쓰지 말 것**: "차트 기본이 priorityClassName: system-cluster-critical 이고 그
-#       PriorityClass 는 kube-system 전용이다" 는 **틀렸다** — default ns 에서도 server-side
-#       dry-run 이 통과한다. 구버전 제약의 기억이다.
-#
-# 🔴 Terraform 전제(전부 완비):
-#    · 컨트롤러 IAM role · 노드 IAM role · 중단 SQS `Karpenter-eks-demo-dev-an2-main-01`
-#    · Pod Identity association **kube-system/karpenter**
-#      (upstream `modules/karpenter` v21.24.1 의 `namespace` 기본값. **변수로 노출돼 있어 가역적**이다 —
-#       우리 facade 가 안 넘길 뿐이라 "못 바꾼다"가 아니라 "안 바꾼다"다)
-#    · 노드 SG 의 `karpenter.sh/discovery` 태그(modules/eks-cluster의 `node_security_group_tags`가
-#      계약으로 부여)
 ---
-# ────────────────────────────────────────────────────────────────────────────
-# ① 컨트롤러 (OCI helm)
-# ────────────────────────────────────────────────────────────────────────────
+# prd 티어 — 컨트롤러(OCI helm)
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  # ⚠️ **이 이름은 돌고 있는 클러스터가 있을 때 바꾸지 않는다.** 바꾸면 이 ApplicationSet이
-  #    삭제된 것으로 처리되고, 그것이 만든 Application이 ownerReference를 따라 지워지면서
-  #    finalizer가 **컨트롤러 실물까지 prune한다**(경로는
-  #    아래 ① template의 finalizer 주석 참조). 이름을 정리할 수 있는 시점은 **전면 철거 이후,
-  #    seed 이전**뿐이다. 삭제를 관측할 ArgoCD가 없어야 안전하다.
   name: karpenter-prd
   namespace: argocd
 spec:
   generators:
     - clusters:
         selector:
-          # staged 전파 — prd 티어. 노드를 직접 만드는 컨트롤러라 비운영에서 먼저 확인하고
-          # 승격한다. 아래 nonprd 블록과의 `targetRevision` 차이가 승격 지점을 기록한다.
+          # 노드를 직접 만드는 컨트롤러라 비운영에서 먼저 확인하고 승격한다.
           matchLabels:
             tier: prd
   template:
     metadata:
       name: '{{name}}-karpenter'
-      # 이 finalizer가 없으면 Application CR을 지워도(cluster generator가 더 이상
-      # 발견 못 하는 경우 포함) 실제로 만든 리소스(Deployment 등)는 클러스터에 orphan으로
-      # 남는다.
       finalizers:
         - resources-finalizer.argocd.argoproj.io
       annotations:
@@ -82,44 +34,30 @@ spec:
     spec:
       project: platform
       sources:
-        # ⚠️ OCI registry 다. ALBC 의 HTTP helm repo 와 **다른 호스트**라 egress 를 따로 확인했다
-        #    (canary: revision 1.14.0 해석 + rendered 18, conditions 없음).
-        #    Repository Secret 도 enableOCI 설정도 **필요 없다** — scheme 없는 repoURL 만으로 pull 된다.
+        # OCI registry 다. Repository Secret 도 enableOCI 설정도 필요 없다 —
+        # scheme 없는 repoURL 만으로 pull 된다.
         - repoURL: public.ecr.aws/karpenter
           chart: karpenter
-          # 핀 근거: ECR Public 태그 전수(2,317개, Link 헤더 페이지네이션) 중 최신.
-          # 근거: 호환성 매트릭스 원문 `1.35 → >= 1.9` (1.36 → >= 1.13 이라 다음 업그레이드도 충족).
-          # 🔑 OCI 태그가 곧 chart 버전이다 — GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
+          # 🔑 OCI 태그가 곧 chart 버전이다 — GitHub 릴리스 태그를 보면 "태그≠Chart.yaml"
+          #    함정에 걸린다. 호환성 매트릭스는 클러스터 1.35에 >= 1.9 를 요구한다.
           targetRevision: 1.14.0
           helm:
-            # Application 이름({{name}}-karpenter)과 release 이름을 분리한다 — 근거는
-            # aws-load-balancer-controller.yaml과 같다.
             releaseName: karpenter
-            # 팬아웃 시점에만 정해지는 값은 여기 남는다. fasttemplate 은 Application spec 에만
-            # 적용되고 git 경로 안의 파일에는 적용되지 않는다.
             parameters:
-              # 이 값이 없으면 helm template 이 실패한다:
-              #   "Chart cannot be installed without a valid settings.clusterName!"
-              # ⚠️ 그 실패는 rendered 0 + ComparisonError 로 나타나 **egress 실패와 똑같이 보인다.**
-              #    구분 신호는 revision 해석 여부다 — 해석되면 egress는 정상이고 값 문제다.
+              # 없으면 helm template 이 실패한다. ⚠️ 그 실패는 rendered 0 + ComparisonError 라
+              # egress 실패와 똑같이 보인다 — revision 이 해석됐으면 egress 가 아니라 값 문제다.
               - name: settings.clusterName
                 value: '{{name}}'
-              # Terraform 서브모듈이 SQS 를 `Karpenter-<cluster>` 로 명명한다 ⇒ 클러스터명에서 **파생**된다.
-              # 라벨을 새로 만들지 않는 이유가 이것이다.
+              # SQS 이름이 클러스터명에서 파생되므로 라벨을 새로 만들지 않는다.
               - name: settings.interruptionQueue
                 value: 'Karpenter-{{name}}'
-            # 저장소가 아는 값은 파일로 — prd·nonprd 두 블록이 같은 파일을 읽어 갈릴 수 없다.
-            # $values 는 아래 `ref: values` source 의 저장소 루트다.
             valueFiles:
               - $values/addons/karpenter/values.yaml
-        # 값 참조 전용 source — `ref` 만 있고 path/chart 가 없으므로 렌더 대상이 아니다.
         - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
           targetRevision: main
           ref: values
       destination:
         server: '{{server}}'
-        # 네임스페이스 예외 — APF FlowSchema. 근거 전문은 위 헤더.
-        # ⚠️ 다른 addon 은 전용 ns 를 신설한다(CreateNamespace=true).
         namespace: kube-system
       syncPolicy:
         automated:
@@ -128,28 +66,8 @@ spec:
         syncOptions:
           - ServerSideApply=true
 ---
-# ────────────────────────────────────────────────────────────────────────────
-# ①-nonprd 컨트롤러 — staged 전파의 nonprd 티어
-#
-# 🔑 위 ①-prd 블록과 이 블록의 `targetRevision` 차이가 **승격이 어디까지 갔는지**를 저장소에
-#    기록한다. 다르면 진행 중, 같아지면 끝난 것이다.
-#
-# ⚠️ 그 티어의 클러스터가 아직 없으면 대상이 0개가 된다. 사고가 아니라 **빈 슬롯**이고,
-#    cluster Secret이 tier=nonprd로 등록되는 순간 자동 팬아웃된다. ArgoCD는 대상 0개 팬아웃을
-#    오류로 보고하지 않으므로, 0이 의도인지 사고인지는 등록된 cluster Secret의 `tier` 값을 세어
-#    구분한다(어느 쪽 값도 아닌 클러스터가 있으면 사고다).
-#
-# ⚠️ **클러스터 등록 시 매칭 라벨을 빠뜨리지 않는다.** `environment`와 `tier`를 둘 다 붙이고,
-#    ②가 읽는 `karpenterNodeRole`(role 이름에 26자 hash 접미가 붙어 재구축마다 바뀐다)과 ALBC가
-#    읽는 `vpcName`도 함께 붙인다. teardown은 **매칭 라벨을 먼저 떼어낸 뒤** 삭제하는 절차라,
-#    git 이력의 마지막 cluster-secret을 그대로 되살리면 라벨이 빠진 채 등록된다.
-#    ⇒ 그 상태로는 Application이 **하나도** 생기지 않는다(조용히 실패한다).
-#
-# ⛔ **두 블록을 함께 고친다.** 값이 갈려야 하는 것은 `targetRevision` 하나뿐이다. helm values 는
-#    addons/karpenter/values.yaml 하나를 양 블록이 읽으므로 갈릴 수 없고, 갈릴 수 있는 것은
-#    parameters·네임스페이스·syncPolicy 다. 네임스페이스·APF 근거 주석은 위 ① 블록이 소유하고
-#    여기서는 중복하지 않는다.
-# ────────────────────────────────────────────────────────────────────────────
+# nonprd 티어 — 규약은 README 「staged 전파」. 위 블록과 함께 고치고, 갈려도 되는 값은
+# targetRevision 하나다.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -173,7 +91,6 @@ spec:
       sources:
         - repoURL: public.ecr.aws/karpenter
           chart: karpenter
-          # 승격 대기 중에는 이 값이 prd보다 앞선다. 검증이 끝나면 prd를 같은 값으로 올린다.
           targetRevision: 1.14.0
           helm:
             releaseName: karpenter

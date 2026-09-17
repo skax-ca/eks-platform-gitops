@@ -4,9 +4,9 @@ metadata:
   name: default
   annotations:
     kubernetes.io/description: >-
-      플랫폼 baseline NodePool. 시스템·컨트롤러는 managed NG 에 두고 앱·버스트만 여기서 받는다
-      (20 열린 항목 2). Karpenter 컨트롤러 자신은 chart affinity 가
-      karpenter.sh/nodepool DoesNotExist 라 이 풀을 자연히 회피한다.
+      플랫폼 baseline NodePool. 시스템·컨트롤러는 managed NG 에 두고 앱·버스트만 여기서 받는다.
+      Karpenter 컨트롤러 자신은 chart affinity 가 karpenter.sh/nodepool DoesNotExist 라 이 풀을
+      자연히 회피한다.
 spec:
   template:
     spec:

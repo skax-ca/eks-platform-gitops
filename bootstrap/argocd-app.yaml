@@ -1,77 +1,45 @@
-# ArgoCD 자기 관리 Application — "seed 1회 + 자기 관리"의 **2단계(흡수)**
+# ArgoCD 자기 관리 Application — workbench 에서 helm install 한 결과를 흡수한다.
+#
+# 흡수한 순간부터 ArgoCD 의 SSOT 는 helm 릴리스가 아니라 이 저장소다. ⛔ 이후 helm CLI 를
+#    다시 쓰지 않는다. 업그레이드·values 변경은 전부 Git → pull 이다.
+# 🔑 ApplicationSet 이 아니라 Application 인 이유: ArgoCD 는 hub 에만 산다. cluster generator 로
+#    팬아웃하면 등록된 모든 스포크에 ArgoCD 가 통째로 설치된다. ⚠️ 클러스터가 하나뿐일 때는
+#    대상이 hub 자신뿐이라 정상으로 보이고, 두 번째 클러스터가 등록되는 순간 터진다.
+# 위치가 applicationsets/ 가 아닌 것도 같은 이유다 — 그 디렉토리의 계약은 전 클러스터 팬아웃이다.
+#    ⚠️ root-app.yaml 의 include 가 이 파일을 경로로 명시한다. 옮기면 그 목록도 함께 고친다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
-#
-# seed(0단계)는 workbench 에서 사람이 `helm install` 했다. 이 파일이 그 결과를 **흡수**하고,
-#    그 순간부터 ArgoCD 의 SSOT 는 helm 릴리스가 아니라 **이 저장소**가 된다.
-#    이후 업그레이드·values 변경은 전부 Git → pull 이다. ⛔ helm CLI 를 다시 쓰지 않는다.
-#
-# ─────────────────────────────────────────────────────────────────────────────
-# 🔴 **ApplicationSet 이 아니라 Application 인 것이 이 파일의 첫 번째 결정이다**
-#
-#    ArgoCD 는 hub 에만 산다. cluster generator 로 팬아웃하면 **등록된 모든 스포크에 ArgoCD 가
-#    통째로 설치된다.** ⚠️ 지금은 클러스터가 1개라 대상이 hub 자신뿐이어서 **정상으로 보인다** —
-#    두 번째 클러스터가 등록되는 순간 터진다.
-#    🔑 **단일 클러스터는 팬아웃 결함을 숨긴다.** 전용 네임스페이스 addon을 등록할 때도 같은
-#       형태의 함정이 있다 — 자동 생성 Namespace가 AppProject의 clusterResourceWhitelist 검사를
-#       받는데, ns가 이미 있으면 그 검사 자체가 생기지 않아 **두 번째 클러스터에서만** 터진다.
-#
-# 위치도 `applicationsets/baseline/` 이 아니다. 그 디렉토리의 계약은 "전 클러스터 팬아웃"이고
-# 이것은 hub 단일이다. seed 산출물인 argocd-values.yaml 과 **같은 자리**에 둔다.
-# ⚠️ root App 의 `include` 가 이 파일을 경로로 명시한다(bootstrap/root-app.yaml). 옮기면
-#    그 목록도 같이 고쳐야 root App 이 계속 흡수한다.
-# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  # **이 이름이 helm release 이름이 된다 — 틀리면 흡수가 아니라 병렬 설치다.**
-  #    argocd-seed.sh 의 ARGOCD_RELEASE 기본값이 `argocd` 이고, helm 은 릴리스 이름으로
-  #    리소스 이름을 만든다(argocd-server·argocd-repo-server…). 이름이 어긋나면 ArgoCD 는
-  #    `<다른이름>-server` 같은 **완전히 새로운 44개 리소스**를 만든다 — adopt 가 아니다.
+  # ⚠️ 이 이름이 helm release 이름이 된다. argocd-seed.sh 의 ARGOCD_RELEASE 와 어긋나면 흡수가
+  #    아니라 병렬 설치가 된다 — ArgoCD 가 `<다른이름>-server` 같은 새 리소스를 통째로 만든다.
   name: argocd
   namespace: argocd
   # ⛔ finalizer 를 넣지 않는다 — root-app 과 같은 이유. 이 Application 을 지울 때 ArgoCD 자신이
   #    cascade 삭제되면 seed 를 처음부터 다시 밟아야 한다.
-  # ⛔ **`compare-options: ServerSideDiff=true` 를 여기 넣지 않는다 — 넣었다가 철회했다.**
-  #    넣은 근거는 *"37개가 helm 소유 `meta.helm.sh` 애노테이션 때문에 OutOfSync"* 였는데,
-  #    `argocd app diff argocd --core` 로 실제 diff 를 열어 보니 **`meta.helm.sh` 는 0회 등장**했다.
-  #    37개의 차이는 **전부 한 줄**이다:
-  #        >     argocd.argoproj.io/tracking-id: argocd:/ConfigMap:argocd/argocd-cm
-  #    ⇒ **diff 전략으로 풀 수 있는 문제가 아니다.** tracking-id 는 desired 가 *실제로 선언하는*
-  #       필드이고 ArgoCD 자신이 소유할 필드다. ServerSideDiff 는 *선언하지 않은* 필드만 되돌린다.
-  #       **sync 를 한 번 해야 사라진다** = 2단계(PR-②b)가 소유한다.
-  #    그리고 이것이 흡수가 안전하다는 **가장 강한 증거**다 — 37개에서 유일한 차이가
-  #       ArgoCD 자신의 추적 애노테이션이라는 뜻이고, **pod template 은 건드리지 않는다.**
-  #    🔑 대조군: kyverno 의 ClusterPolicy live 에는 tracking-id 가 **있다**(ArgoCD 가 apply 했으니까).
+  # ⛔ compare-options: ServerSideDiff 를 여기 넣지 않는다. 흡수 직후의 OutOfSync 는 ArgoCD 자신의
+  #    tracking-id 애노테이션 때문이고, 그것은 desired 가 실제로 선언하는 필드라 diff 전략으로
+  #    사라지지 않는다. sync 를 한 번 하면 해소된다.
 spec:
   project: platform
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # multi-source — 차트는 argo-helm 에 있고 values 는 이 저장소에 있다.
-  #   둘을 겹치려면 multi-source 가 필요하다.
-  # ───────────────────────────────────────────────────────────────────────────
+  # multi-source — 차트는 argo-helm 에, values 는 이 저장소에 있다.
   sources:
     - repoURL: https://argoproj.github.io/argo-helm
       chart: argo-cd
-      # ⛔ **이 증분에서 차트를 올리지 않는다.** seed 가 설치한 정확 핀 그대로다.
-      #    흡수와 업그레이드를 같은 커밋에 넣으면 실패했을 때 "흡수가 문제인가 새 차트가 문제인가"를
-      #    가를 수 없다 — helm CLI 버전을 핀할 때와 같은 셈법이다.
-      #    게다가 자기소멸 원칙이 이것을 요구한다: 흡수 대상은 seed 산출물의 **바이트 동일 사본**이어야
-      #       한다. 버전을 올리면 그건 흡수가 아니라 업그레이드이고, 다른 행위다.
+      # ⛔ 흡수와 차트 업그레이드를 같은 커밋에 넣지 않는다. 흡수 대상은 seed 산출물의 바이트
+      #    동일 사본이어야 하고, 버전을 올리면 실패했을 때 어느 쪽이 원인인지 가를 수 없다.
       targetRevision: 10.3.0
       helm:
-        # 🔴 명시가 중복처럼 보이지만 **죽은 설정이 아니다.** ArgoCD 는 release 이름을 Application
-        #    이름에서 가져오므로 기본값과 같지만, 그 결합은 **이름을 바꾸는 순간 조용히 깨진다.**
-        #    값으로 고정해 argocd-seed.sh 의 ARGOCD_RELEASE 와의 연결을 문서화한다.
+        # 기본값과 같지만 명시한다 — ArgoCD 는 release 이름을 Application 이름에서 가져오므로,
+        #    그 결합은 이름을 바꾸는 순간 조용히 깨진다.
         releaseName: argocd
-        # $values 는 아래 `ref: values` source 를 가리킨다.
-        # argocd-values.yaml 은 root-app 의 `include` 범위 밖이다(bootstrap/root-app.yaml).
-        #    root App 은 그것을 k8s 매니페스트로 읽지 않고, 여기서는 *다른 Application 의
-        #    다른 source 에서 helm values 로* 읽는다.
+        # argocd-values.yaml 은 root App 의 include 범위 밖이다. root App 은 그것을 매니페스트로
+        #    읽지 않고, 여기서만 helm values 로 읽는다.
         valueFiles:
           - $values/bootstrap/argocd-values.yaml
 
-    # 값 참조 전용 source — `ref` 만 있고 path/chart 가 없으므로 **렌더 대상이 아니다.**
     - repoURL: https://github.com/skax-ca/eks-platform-gitops.git
       targetRevision: main
       ref: values
@@ -80,43 +48,19 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # ✅ **2단계 — `automated` 를 켠다**
-  #
-  #    1단계는 `automated` 없이 **비교만** 했다. 흡수 순간 diff 가 있으면 즉시 적용되고 그 대상이
-  #    **application-controller 자신**이라, sync 주체가 sync 도중에 재시작하면 무엇이 적용되고
-  #    무엇이 안 됐는지 알 수 없기 때문이다.
-  #
-  #    ✅ 1단계가 답한 것 — `argocd app diff argocd --core` 로 확인: 37개의 차이는 **전부 한 줄**,
-  #       `argocd.argoproj.io/tracking-id` 다. ⇒ 흡수해도 **실질 변경이 0**.
-  #    ✅ 2단계 전에 추가로 답한 것 — 실제 렌더본(`argocd app manifests`)으로 SSA dry-run:
-  #       `helm` 과 **2건 충돌**하지만(atomic 구조체 + apiserver 기본값), `--force-conflicts` 예측은
-  #       **pod template 5개·NetworkPolicy 4개 전부 IDENTICAL** 이고 argocd-secret data 5키가
-  #       보존된다 ⇒ **충돌 해소는 소유권 이전일 뿐 값 변경 0** ⇒ **재시작이 없어야 한다.**
-  # ───────────────────────────────────────────────────────────────────────────
+  # ⚠️ automated 를 켜기 전에 diff 가 tracking-id 애노테이션뿐인지 확인한다. sync 대상이
+  #    application-controller 자신이라, 실질 변경이 있으면 sync 주체가 sync 도중에 재시작한다.
   syncPolicy:
     automated:
       # 손으로 바꾼 것을 저장소 상태로 되돌린다 — 자기소멸 원칙의 집행 장치(root-app 과 같다).
       selfHeal: true
-      # ⛔ **prune 은 2단계에서도 켜지 않는다.** root App 과 같은 이유다 — 저장소 실수 하나가
-      #    ArgoCD 자신의 구성 요소를 지운다. prune 을 켜도 seed 의 helm 릴리스 Secret
-      #    (`sh.helm.release.v1.argocd.v1`)과 repository Secret(`argocd-repo-gitops`)은 지워지지
-      #    않는다. ArgoCD 는 `argocd.argoproj.io/tracking-id` 애노테이션이 자기를 가리키는
-      #    리소스만 prune 후보로 보고, 그 둘에는 그 애노테이션이 없다.
+      # ⛔ prune 을 켜지 않는다 — root App 과 같은 이유로, 저장소 실수 하나가 ArgoCD 자신의
+      #    구성 요소를 지운다.
       prune: false
     syncOptions:
-      # 🔴 **이것이 Secret/argocd-secret 을 지킨다 — 이 증분의 가장 큰 위험이다.**
-      #    차트는 argocd-secret 을 **data 없이**(메타데이터 + type: Opaque 만) 렌더한다.
-      #    그 자리는 argocd-server 가 런타임에 admin 비밀번호 해시·server.secretkey·TLS 를 채운다.
-      #    SSA 는 **자신이 선언한 필드만 소유**하므로 차트가 data 를 선언하지 않는 한 기존 키를
-      #    건드리지 않는다. ✅ 실제 렌더본 dry-run 으로 실증됐다(data 5키 보존).
-      #
-      #    🔑 **이름만 비슷한 세 축을 섞지 말 것**:
-      #      · `ServerSideApply` = **apply 방식**. 공식 문서상 `kubectl apply --server-side
-      #        --force-conflicts` 로 실행되고 field manager 는 `argocd-controller` 다.
-      #      · ⛔ `Force=true` = **`kubectl delete/create`**. 적용 대상이 ArgoCD 자신이므로
-      #        이 증분이 피하려는 사고 그 자체다. 넣지 않는다.
-      #      · ⛔ `Replace=true` = 객체 통째 교체. 문서가 **`ServerSideApply` 보다 우선한다**고
-      #        명시하므로 넣으면 위의 Secret 보호가 **조용히 무력화**된다.
-      #      · `ServerSideDiff` = **비교 방식**(별개 스위치). 이 앱에는 넣지 않는다 — 위 주석 참조.
+      # 🔑 이것이 Secret/argocd-secret 을 지킨다. 차트는 그 Secret 을 data 없이 렌더하고, 그 자리는
+      #    argocd-server 가 런타임에 admin 비밀번호 해시·server.secretkey·TLS 로 채운다. SSA 는
+      #    자신이 선언한 필드만 소유하므로 차트가 선언하지 않는 기존 키를 건드리지 않는다.
+      #    ⛔ Force=true(delete/create)와 Replace=true(객체 통째 교체)를 넣지 않는다. 특히 Replace 는
+      #       공식 문서상 ServerSideApply 보다 우선해서, 넣으면 이 보호가 조용히 무력화된다.
       - ServerSideApply=true

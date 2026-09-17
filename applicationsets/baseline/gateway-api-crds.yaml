@@ -1,45 +1,21 @@
-# Gateway API 표준 CRD — ①baseline addon (전 클러스터)
+# Gateway API 표준 CRD — baseline addon. CRD 만 설치한다.
+#
+# 🔑 컨트롤러는 aws-load-balancer-controller.yaml 이 그대로 담당한다. 이 CRD 가 있어도 AWS 리소스는
+#    생기지 않는다 — Gateway API 타입을 apiserver 에 등록할 뿐이고, ALB 를 만드는 것은 gateway.yaml 이다.
+# ⛔ AWS 전용 Gateway CRD 를 위한 별도 addon 을 만들지 않는다. ALBC 차트의 `crds/` 폴더가 이미
+#    설치하므로, 또 만들면 같은 CRD 를 두 Application 이 소유하려는 충돌이 난다.
+# 소스가 helm repo 가 아니라 git repo 인 이유: upstream 이 이 CRD 세트를 차트로 배포하지 않는다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
-#
-# 🔑 컨트롤러가 아니라 **CRD만** 설치하는 addon이다. 실제 트래픽을 만드는 컨트롤러는 이미 있는
-#    `aws-load-balancer-controller.yaml`(chart 3.5.0 = appVersion v3.5.0)이 — GA 요구 최소버전
-#    v2.13.0을 이미 넘겨서 — 그대로 담당한다. Terraform 쪽(IAM·모듈 버전)도 변경이 없다:
-#    `terraform-aws-modules/eks-pod-identity` v2.8.2가 붙이는 ALBC 정책에 GA 시대 액션
-#    (DescribeCapacityReservation 등)이 이미 포함돼 있다(GitHub 소스 확인).
-#    ⇒ 새로 추가할 것은 이 파일 하나뿐이다.
-#
-# ⛔ AWS 전용 Gateway CRD(TargetGroupConfiguration·LoadBalancerConfiguration·
-#    ListenerRuleConfiguration)를 위한 별도 addon은 **만들지 않는다** — 이미
-#    `aws-load-balancer-controller.yaml`이 쓰는 chart 자신의 `crds/` 폴더에 그 3개가 들어있고,
-#    ArgoCD는 `skipCrds`를 켜지 않는 한 기본적으로 `helm template --include-crds`로 렌더하므로
-#    이미 설치돼 있다(`helm template aws-lbc eks-charts/aws-load-balancer-controller --version
-#    3.5.0 --include-crds`로 로컬 렌더해 3개 CRD가 출력에 포함됨을 확인). 별도 Application을
-#    또 만들면 같은 CRD를 두 Application이 동시에 소유하려는 충돌이 난다 — 이 저장소가 이미 아는
-#    표준 Gateway API CRD(gateway.networking.k8s.io 그룹)만 이 파일이 담당하는 이유다.
-#
-# ⚠️ 이 CRD가 있어도 아무 AWS 리소스도 생기지 않는다 — Gateway API 타입을 apiserver에
-#    등록할 뿐이다. 실제 ALB를 만드는 것은 `Gateway` 리소스이고, 그 트리거가 되는
-#    `GatewayClass`(gateway.k8s.aws/alb)는 별도 baseline addon `gateway.yaml`이 만든다 —
-#    레퍼런스 아키텍처로서 GatewayClass·Gateway까지 실사용 계층을 보여주기로 했다(HTTPRoute·
-#    백엔드는 여전히 계층 3, 이 저장소 범위 밖).
-#
-# 소스가 helm repo가 아니라 **git repo(디렉토리)**인 이유: upstream(kubernetes-sigs/gateway-api)이
-#    이 CRD 세트를 helm chart로 배포하지 않는다(GitHub Release 첨부 YAML만 제공) — 그 YAML이
-#    그대로 git 태그 경로(config/crd/standard)에도 있어 ArgoCD Directory 소스로 바로 쓸 수 있다.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  # ⚠️ **이 이름은 돌고 있는 클러스터가 있을 때 바꾸지 않는다.** 바꾸면 이 ApplicationSet이
-  #    삭제된 것으로 처리되고, 그것이 만든 Application이 ownerReference를 따라 지워지면서
-  #    finalizer가 **CRD 실물까지 prune한다** — 그 CRD를 쓰던 Gateway·HTTPRoute도 cascade로
-  #    사라지므로 이 addon은 그 대가가 가장 크다. 이름을 정리할 수 있는 시점은 **전면 철거
-  #    이후, seed 이전**뿐이다. 삭제를 관측할 ArgoCD가 없어야 안전하다.
+  # ⚠️ 이름을 바꾸면 CRD 실물까지 prune 되고, 그 CRD 를 쓰던 Gateway·HTTPRoute 도 cascade 로
+  #    사라진다. 이 addon 은 그 대가가 가장 크다(README 「ApplicationSet 공통 규약」).
   name: gateway-api-crds-prd
   namespace: argocd
 spec:
   generators:
-    # staged 전파 — prd 티어. 아래 nonprd 블록과의 `targetRevision` 차이가 승격 지점을 기록한다.
     - clusters:
         selector:
           matchLabels:
@@ -53,41 +29,23 @@ spec:
       project: platform
       source:
         repoURL: https://github.com/kubernetes-sigs/gateway-api.git
-        # 핀 근거: GitHub Releases 중 prerelease가 아닌 최신 stable. 다음에 올릴 때는
-        # releases API로 다시 확인한다(기존 핀 값을 여기 남기지 않는다 — git이 이력을 갖는다).
         targetRevision: v1.6.2
-        # kustomization.yaml이 없는 순수 YAML 11개 디렉토리라 ArgoCD가 Directory 타입으로 렌더한다.
+        # kustomization.yaml 이 없는 순수 YAML 디렉토리라 ArgoCD 가 Directory 타입으로 렌더한다.
         path: config/crd/standard
       destination:
         server: '{{server}}'
-        # CRD는 cluster-scoped라 이 ns는 형식상 값이다(Karpenter NodePool 앱과 같은 이유).
+        # CRD 는 cluster-scoped 라 이 ns 는 형식상 값이다.
         namespace: kube-system
       syncPolicy:
         automated:
           prune: true
           selfHeal: true
         syncOptions:
-          # CRD 크기가 client-side apply 애노테이션 한도를 넘는다 — ALBC CRD와 같은 이유.
+          # CRD 크기가 client-side apply 의 애노테이션 한도를 넘는다.
           - ServerSideApply=true
 ---
-# ────────────────────────────────────────────────────────────────────────────
-# staged 전파 — nonprd 티어
-#
-# 🔑 위 prd 블록과 이 블록의 `targetRevision` 차이가 **승격이 어디까지 갔는지**를 저장소에
-#    기록한다. 두 값이 다르면 승격 진행 중이고, 같아지면 끝난 것이다. 클러스터를 열어보지
-#    않고 저장소만 읽어 판정한다.
-#
-# ⚠️ 그 티어의 클러스터가 아직 없으면 대상이 0개가 된다. 사고가 아니라 **빈 슬롯**이고,
-#    cluster Secret이 tier=nonprd로 등록되는 순간 자동 팬아웃된다. ArgoCD는 대상 0개 팬아웃을
-#    오류로 보고하지 않으므로, 0이 의도인지 사고인지는 등록된 cluster Secret의 `tier` 값을 세어
-#    구분한다(어느 쪽 값도 아닌 클러스터가 있으면 사고다).
-#
-# ⚠️ 클러스터 등록 시 `environment`와 `tier`를 **둘 다** 붙인다. teardown은 매칭 라벨을 먼저
-#    떼어낸 뒤 삭제하는 절차라, git 이력의 마지막 cluster-secret을 그대로 되살리면 라벨이 빠진
-#    채 등록된다(조용히 실패한다).
-#
-# template은 위 블록과 같다 — 근거 주석은 중복하지 않는다.
-# ────────────────────────────────────────────────────────────────────────────
+# nonprd 티어 — 규약은 README 「staged 전파」. 위 블록과 함께 고치고, 갈려도 되는 값은
+# targetRevision 하나다.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -108,7 +66,6 @@ spec:
       project: platform
       source:
         repoURL: https://github.com/kubernetes-sigs/gateway-api.git
-        # 승격 대기 중에는 이 값이 prd보다 앞선다. 검증이 끝나면 prd를 같은 값으로 올린다.
         targetRevision: v1.6.2
         path: config/crd/standard
       destination:

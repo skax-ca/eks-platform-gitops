@@ -6,9 +6,8 @@ nodeRole: ""
 
 # ── 노드 형태 ────────────────────────────────────────────────────────────────
 #
-# 🔴 **arm64 다.** 이 클러스터의 managed NG는 AL2023_ARM_64_STANDARD·t4g.medium이다(Graviton).
-#    이 값을 amd64로 바꿔 베끼면 arm64 클러스터에 amd64 노드가 섞여 멀티아키 이미지가 없는
-#    워크로드가 죽는다 — 소비 루트가 Graviton을 쓰지 않는 고객사에서만 amd64로 바꾼다.
+# ⚠️ arm64 다. 이 클러스터의 managed NG 가 Graviton(AL2023_ARM_64_STANDARD)이라, amd64 로 바꿔
+#    베끼면 멀티아키 이미지가 없는 워크로드가 죽는다. Graviton 을 쓰지 않는 소비 루트에서만 바꾼다.
 architectures:
   - arm64
 

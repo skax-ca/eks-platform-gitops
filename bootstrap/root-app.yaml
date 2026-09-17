@@ -1,11 +1,10 @@
 # root Application (App-of-Apps) — 부트스트랩의 마지막 seed 대상
 #
-# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
-#       include allow-list 의 근거는 같은 디렉토리의 gitops.md 「하지 않는 것」
+# 자기소멸(self-superseding): workbench 에서 손으로 apply 되지만 apply 직후 자기 자신을 source 에
+#    포함해 흡수한다. ⚠️ 손으로 apply 하는 내용과 커밋본이 바이트 단위로 달라지면 그 차이가
+#    영구 드리프트로 남는다.
 #
-# 자기소멸(self-superseding) — 이 파일은 workbench 에서 손으로 apply 되지만, apply 직후
-#    자기 자신을 source 에 포함해 흡수(adopt)한다. 그 순간부터 이 리소스의 SSOT 는 사람이 아니라
-#    저장소가 된다. 손으로 apply 하는 내용과 커밋본이 **바이트 단위로** 달라지면 영구 드리프트가 된다.
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -17,37 +16,23 @@ spec:
   project: platform
 
   source:
-    # self-managed 는 GitHub 를 직접 읽는다. 인증은 **GitHub App** repository Secret 이다.
-    # ⚠️ 관리형 Capability 로 전환하면 여기에 CodeConnections 프록시 URL 을 쓴다 —
-    #    그 URL 은 account-id·region·connection-id 를 포함해 환경마다 다르다.
+    # self-managed 는 GitHub 를 직접 읽는다. 인증은 GitHub App repository Secret 이다.
     repoURL: https://github.com/skax-ca/eks-platform-gitops.git
     targetRevision: main
     path: .
     directory:
       recurse: true
-      # 🔴 allow-list 다. 여기 적힌 것만 매니페스트로 읽고 **그 밖은 무엇이든 무시한다.**
-      #    로컬 차트(addons/<addon>/<chart>/)·helm values·이 저장소의 도구 파일은 범위 밖이라
-      #    제외 장치(exclude·skip-rendering 마커)가 필요 없다. 그 두 장치는 쓰지 않는다 —
-      #    기각 근거는 헤더의 gitops.md 「하지 않는 것」이 갖는다.
-      #
-      #    ⚠️ 여기에 **렌더가 깨지는 파일이 든 경로**를 새로 넣으면 그 spec 이 적용된 뒤부터
-      #       자기 갱신이 멈춘다. root-app 은 자기 spec 을 **클러스터에 적용된 옛 spec** 으로
-      #       렌더한 뒤에야 갱신하는데, 그 렌더가 깨지면 갱신에 이르지 못하기 때문이다. 그
-      #       파일을 고치는 커밋이 풀거나, argocd-seed.sh 를 root Application 단계만
-      #       (--from 5 --to 5) 다시 돌려 커밋본을 손으로 apply 한다(커밋본 그대로라 자기소멸
-      #       원칙 안이다).
-      #
-      #    매니페스트 디렉토리를 새로 만들면 이 목록에 한 줄 더한다. 그 디렉토리 안에서
-      #    파일이 늘고 줄어드는 것은 이 파일과 무관하다.
+      # allow-list 다. 여기 적힌 것만 매니페스트로 읽고 그 밖은 무엇이든 무시한다 — addons/ 전체와
+      #    bootstrap/argocd-values.yaml 이 범위 밖이라 exclude 나 skip-rendering 마커가 필요 없다.
       #      · projects/*.yaml                 AppProject
-      #      · clusters/**/cluster-secret.yaml cluster Secret. `**` 라 env 깊이와 무관하다
-      #      · applicationsets/**/*.yaml       ApplicationSet 전부(baseline 팬아웃 · catalog opt-in).
-      #                                        이 디렉토리의 계약이 "ApplicationSet 만 둔다" 라
-      #                                        하위 디렉토리가 늘어도 이 줄은 그대로다
+      #      · clusters/**/cluster-secret.yaml `**` 라 env 깊이와 무관하다
+      #      · applicationsets/**/*.yaml       baseline·catalog 전부. 하위 디렉토리가 늘어도 그대로다
       #      · bootstrap/root-app.yaml         이 파일 자신(자기소멸)
       #      · bootstrap/argocd-app.yaml       ArgoCD 자기 관리 Application
-      #    addons/ 는 통째로 범위 밖이다 — ApplicationSet 의 source 가 읽는 내용물(helm values ·
-      #    로컬 차트 · CR)만 있다. bootstrap/argocd-values.yaml 도 helm values 라 넣지 않는다.
+      #    매니페스트 디렉토리를 새로 만들면 한 줄 더한다.
+      # ⚠️ 렌더가 깨지는 파일이 든 경로를 여기 넣으면 그 spec 이 적용된 뒤부터 자기 갱신이 멈춘다.
+      #    root App 은 자기 spec 을 클러스터에 적용된 옛 spec 으로 렌더한 뒤에야 갱신하기 때문이다.
+      #    그 파일을 고치는 커밋이 풀거나, argocd-seed.sh --from 5 --to 5 로 커밋본을 다시 apply 한다.
       include: '{projects/*.yaml,clusters/**/cluster-secret.yaml,applicationsets/**/*.yaml,bootstrap/root-app.yaml,bootstrap/argocd-app.yaml}'
 
   destination:

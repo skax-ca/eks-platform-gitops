@@ -1,23 +1,14 @@
-# Karpenter NodePool/EC2NodeClass — ①baseline addon (계층 2가 소유하는 인프라 CR)
+# Karpenter NodePool/EC2NodeClass — baseline addon. 계층 2가 소유하는 인프라 CR 이다.
+#
+# 컨트롤러는 karpenter.yaml 이 갖는다. 이 CR 은 그 차트가 동봉한 CRD 가 선존재해야 적용되므로
+#    sync-wave 5 다.
+# ⛔ 티어로 나누지 않는다(uniform). targetRevision 이 이 저장소 자신이라 두 벌로 쪼개도 값이 항상
+#    같아 승격이 기록되지 않는다. ⚠️ 그래서 컨트롤러 승격이 진행 중이면 이 차트가 두 CRD 버전
+#    모두에서 유효해야 한다. 새 버전에서 생긴 필드가 필요하면 그 승격을 끝내고 커밋한다.
+# Terraform 전제: 노드 IAM role. 그 이름만 클러스터명에서 파생되지 않아 cluster Secret 의
+#    karpenterNodeRole 라벨로 받는다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
-#
-# **Karpenter 파일 2개 중 ②다** — ① 컨트롤러는 `karpenter.yaml`. 파일이 나뉜 이유는 그 헤더가
-#    갖는다. 이 CR 은 컨트롤러 차트가 동봉한 CRD 가 **선존재해야** 적용되므로 sync-wave 5 다.
-#
-# ⛔ **이 파일은 티어로 나누지 않는다(uniform).** `targetRevision` 이 `main`(이 저장소 자신)이라
-#    두 벌로 쪼개도 값이 항상 같아 승격이 기록되지 않는다. 블록만 늘고 읽을 정보가 없다.
-#    ⇒ 양 티어가 **같은 CR 차트**를 본다.
-#    ⚠️ 그래서 ①의 승격이 진행 중일 때(nonprd 가 새 CRD, prd 가 옛 CRD)는 이 차트가 **두 버전
-#       모두에서 유효해야** 한다. 새 버전에서 생긴 필드를 여기 넣으면 prd 에서 미지의 필드가
-#       된다. 새 필드가 필요하면 ①의 승격을 끝내고 커밋한다.
-#    근거: iac-module-library docs/architectures/gitops-hub-spoke/gitops.md
-#          「전파 정책: 누가 받고, 어떤 버전을 받나」
-#
-# 🔴 Terraform 전제: 노드 IAM role. 그 이름이 **클러스터명에서 파생 불가**해(26자 hash 접미)
-#    cluster Secret 의 `karpenterNodeRole` 라벨로 받는다. 나머지 전제(컨트롤러 IAM role·중단 SQS·
-#    Pod Identity)는 ①이 쓴다.
-# ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -27,7 +18,7 @@ spec:
   generators:
     - clusters:
         selector:
-          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
+          # environment 라벨이 있는 cluster Secret 이면 값과
           # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
           # 라벨 자체가 없어 여기 걸리지 않는다.
           matchExpressions:

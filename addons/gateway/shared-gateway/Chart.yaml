@@ -1,14 +1,11 @@
 apiVersion: v2
 name: shared-gateway
 description: |
-  GatewayClass · Gateway · LoadBalancerConfiguration — 계층 2(플랫폼 GitOps)가 소유하는
-  Gateway API 인프라 CR. 계층 3(HTTPRoute·백엔드 라우팅 규칙)은 이 저장소 범위 밖이다
-  (README "이 저장소가 다루는 것 / 다루지 않는 것" 참조 — apps/ 디렉토리를 두지 않는다).
+  GatewayClass · Gateway · LoadBalancerConfiguration — 계층 2가 소유하는 Gateway API 인프라 CR.
+  HTTPRoute·백엔드 라우팅 규칙은 계층 3이라 이 저장소 범위 밖이다.
 
-  ⚠️ 이것이 helm 차트인 이유는 Karpenter NodePool과 같다. ApplicationSet 의 fasttemplate 이
-     Application spec 에만 적용되고 git 경로 안의 파일에는 적용되지 않기 때문이다 —
-     per-cluster 값(clusterName·environment)을 CR 에 주입할 다른 수단이 없다.
-     ⇒ 차트 하나에 템플릿 세 개(GatewayClass·LoadBalancerConfiguration·Gateway). 그 이상은
-     만들지 않는다.
+  ⚠️ 평문이 아니라 helm 차트인 이유는 per-cluster 값을 CR 에 주입할 다른 수단이 없어서다.
+     ApplicationSet 의 fasttemplate 은 Application spec 에만 적용되고 git 경로 안의 파일에는
+     적용되지 않는다.
 type: application
 version: 0.1.0

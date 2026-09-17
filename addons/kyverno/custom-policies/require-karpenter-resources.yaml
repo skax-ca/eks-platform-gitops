@@ -1,9 +1,7 @@
-# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
+# 이 저장소가 직접 소유하는 ClusterPolicy. 업스트림 PSS 정책과 별도 Application 인 이유는
+# applicationsets/baseline/kyverno-custom-policies.yaml 헤더가 갖는다.
 #
-# 이 정책은 kyverno-policies(업스트림 PSS baseline)와 별개다 — 그 Application의 source는
-#    upstream chart(kyverno-policies) 하나로 고정돼 있어 임의의 새 정책을 주입할 수 없다.
-#    그래서 이 저장소가 직접 소유하는 정책은 형제 ApplicationSet(kyverno-custom-policies)으로
-#    따로 둔다.
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -24,10 +22,9 @@ metadata:
       정책(require-requests-limits, kyverno.io/policies/best-practices)과 AWS EKS
       Best Practices Guide가 공통으로 권고하는 방향이다.
 spec:
-  # ⚠️ Enforce다 — Audit으로 먼저 관찰하지 않고 바로 차단한다.
-  #    failurePolicy는 값을 적지 않는다 — ClusterPolicy 기본값이 Fail이고,
-  #    Enforce와 Fail이 짝이 맞는 조합이다(applicationsets/baseline/kyverno.yaml의
-  #    kyverno-policies가 Audit+Ignore로 짝을 맞춘 것과 반대 방향으로 같은 원칙).
+  # ⚠️ Enforce 다 — Audit 으로 먼저 관찰하지 않고 바로 차단한다. failurePolicy 는 적지 않는다.
+  #    ClusterPolicy 기본값 Fail 이 Enforce 와 짝이 맞는 조합이다(업스트림 PSS 정책이
+  #    Audit + Ignore 로 짝을 맞춘 것과 같은 원칙, 반대 방향).
   validationFailureAction: Enforce
   background: true
   rules:
@@ -39,13 +36,11 @@ spec:
                 - Pod
       exclude:
         any:
-          # ArgoCD 자기 자신은 제외한다. 확인(helm show values argo/argo-cd --version
-          # 10.3.0): 모든 컴포넌트가 resources: {} (기본값 미설정)이고
-          # bootstrap/argocd-values.yaml도 그 값을 채우지 않았다 — 지금 켜면 ArgoCD
-          # 자신의 재배포가 이 정책에 막힌다(Kyverno 장애 → ArgoCD 막힘 → 고칠 수단
-          # 상실과 같은 계열의 순환 의존 위험).
-          # kube-system·kyverno·kube-public·kube-node-lease는 Kyverno 기본
-          # config.resourceFilters가 이미 모든 정책에서 제외한다 — 여기 따로 적지 않는다.
+          # ArgoCD 자기 자신은 제외한다. argo-cd 차트가 모든 컴포넌트를 resources: {} 로 두고
+          # bootstrap/argocd-values.yaml 도 그 값을 채우지 않아서, 빼지 않으면 ArgoCD 자신의
+          # 재배포가 이 정책에 막힌다 — Kyverno 장애가 ArgoCD 를 막고 고칠 수단을 잃는 순환이다.
+          # kube-system·kyverno·kube-public·kube-node-lease 는 Kyverno 기본 resourceFilters 가
+          # 이미 모든 정책에서 제외하므로 여기 적지 않는다.
           - resources:
               namespaces:
                 - argocd

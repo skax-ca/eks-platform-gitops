@@ -1,24 +1,12 @@
-# Kyverno 커스텀 정책 — ①baseline addon (이 저장소가 직접 소유하는 ClusterPolicy)
+# Kyverno 커스텀 정책 — baseline addon. 이 저장소가 직접 소유하는 ClusterPolicy 다.
+#
+# 업스트림 정책(kyverno-policies.yaml)과 별도 Application 인 이유는 소유권이다. 그쪽은 차트 하나로
+#    source 가 고정돼 있어 새 정책을 주입할 수 없다.
+# uniform 인 이유: targetRevision 이 main 이라 승격할 버전이 없다. ⚠️ 그래서 양 티어가 같은 정책을
+#    본다 — 엔진 승격이 진행 중이면 이 정책이 두 엔진 버전 모두에서 유효해야 한다. 새 버전에서 생긴
+#    필드를 쓰려면 엔진 승격을 끝내고 커밋한다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
-#
-# **Kyverno 파일 3개 중 ③이다** — ① 엔진은 `kyverno.yaml`, ② PSS 정책은
-#    `kyverno-policies.yaml`. 파일이 나뉜 이유는 `kyverno.yaml` 헤더가 갖는다.
-#
-# **②와 별도 Application 인 이유는 소유권이다.** ②는 업스트림 차트 하나로 source 가 고정돼
-#    있어 임의의 새 정책을 주입할 수 없다. 그래서 우리가 직접 만든 정책은 형제 Application 으로
-#    따로 둔다(`addons/kyverno/custom-policies/`).
-#    그 경로는 평문 매니페스트 디렉토리다 — 클러스터마다 값이 갈리지 않아 주입할 것이 없다.
-#
-# **uniform 인 이유**: `targetRevision: main` 이라 승격할 버전이 없다. ①②가 staged 로 나뉘어도
-#    이 파일은 나누지 않는다.
-#    ⚠️ 그래서 **양 티어가 같은 정책을 본다.** ①의 승격이 진행 중일 때(nonprd 가 새 CRD, prd 가
-#       옛 CRD) 이 정책은 **두 엔진 버전 모두에서 유효해야** 한다. 새 버전에서 생긴 필드를 쓰려면
-#       ①②의 승격을 끝내고 커밋한다.
-#
-# ────────────────────────────────────────────────────────────────────────────
-# ③ 커스텀 정책 — Karpenter 자원 요구사항 강제 (uniform)
-# ────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -28,9 +16,7 @@ spec:
   generators:
     - clusters:
         selector:
-          # baseline = 전 클러스터. environment 라벨이 있는 cluster Secret 이면 값과
-          # 무관하게 매칭한다(dev·hub·향후 spoke 전부) — ArgoCD 내장 in-cluster 항목에는
-          # 라벨 자체가 없어 여기 걸리지 않는다.
+          # environment 라벨이 있는 cluster Secret 이면 값과 무관하게 매칭한다.
           matchExpressions:
             - key: environment
               operator: Exists
@@ -41,12 +27,9 @@ spec:
         - resources-finalizer.argocd.argoproj.io
       annotations:
         argocd.argoproj.io/sync-wave: "5"
-        # 🔴 ClusterPolicy CRD도 ②(kyverno-policies)와 같은 병이 있다. Application이
-        #    OutOfSync로 고착한다: 우리가 선언하지 않은
-        #    spec.admission=true·spec.emitWarning=false가 live에 존재했다. 둘 다
-        #    Kyverno CRD openAPI 스키마의 default:를 apiserver가 채운 것이라 위 ②의 헤더
-        #    주석과 같은 원인이다. ServerSideDiff 없이는 selfHeal이 매번 "고치고" 다시
-        #    OutOfSync로 돌아오는 무한 루프가 된다.
+        # 업스트림 정책과 같은 원인으로 이것이 없으면 OutOfSync 로 고착한다. 우리가 선언하지
+        #    않은 spec.admission·spec.emitWarning 을 apiserver 가 CRD 스키마의 default 로 채운다.
+        #    ⚠️ 빼면 selfHeal 이 매번 "고치고" 다시 OutOfSync 로 돌아오는 무한 루프가 된다.
         argocd.argoproj.io/compare-options: ServerSideDiff=true
     spec:
       project: platform

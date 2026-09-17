@@ -1,10 +1,10 @@
 # 플랫폼 AppProject — 계층 2(플랫폼 GitOps)의 가드레일
 #
-# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
-# seed 순서 3단계 — 4·5단계(cluster Secret·root App)가 이 프로젝트를 참조하므로 반드시 먼저.
+# seed 3단계다. 4·5단계(cluster Secret·root App)가 이 프로젝트를 참조하므로 반드시 먼저 선다.
+# ⚠️ ArgoCD 의 `default` AppProject 는 세 목록이 전부 '*' 인 완전 개방 상태다. 플랫폼 리소스는
+#    이 전용 프로젝트에만 둔다.
 #
-# ⚠️ ArgoCD 의 `default` AppProject 는 sourceRepos/destinations/clusterResourceWhitelist 가
-#    전부 '*' 인 완전 개방 상태다. 플랫폼 리소스는 이 전용 프로젝트에만 둔다.
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -13,150 +13,85 @@ metadata:
 spec:
   description: 플랫폼팀 소유 계층 2 리소스 (클러스터 등록·addon·컨트롤러 설정)
 
-  # AppProject 는 어느 ns 의 Application 이 자신을 참조할 수 있는지 이 필드로 명시한다.
-  # self-managed 에서는 강제가 아니지만 **규약으로 argocd 하나에 고정**한다 —
-  # 관리형 Capability 로 전환해도 매니페스트가 그대로 통하게 하기 위해서다.
+  # self-managed 에서는 강제가 아니지만 규약으로 argocd 하나에 고정한다 — 관리형 Capability 로
+  # 전환해도 매니페스트가 그대로 통하게 하기 위해서다.
   sourceNamespaces:
     - argocd
 
-  # 계층 3(앱팀)으로의 seam — 플랫폼은 이 저장소에서만 배포한다.
-  # ⚠️ sourceRepos 는 destinations·clusterResourceWhitelist 와 별개의 제3 가드레일이다 —
-  #    Application 의 source repoURL 이 여기 없으면 InvalidSpecError 로 sync 자체가 안 선다.
-  # addon 을 추가할 때마다 그 chart repo 를 여기 추가한다(addon마다 리뷰 지점).
+  # ⚠️ destinations·clusterResourceWhitelist 와 별개의 제3 가드레일이다 — Application 의
+  #    repoURL 이 여기 없으면 InvalidSpecError 로 sync 자체가 안 선다. baseline 이든 catalog 든
+  #    같다. addon 을 추가할 때마다 그 chart repo 를 여기 추가한다.
   sourceRepos:
-    # 이 저장소 — seed 매니페스트 + Karpenter CR 로컬 차트(addons/karpenter/nodepool).
+    # 이 저장소 — seed 매니페스트와 로컬 차트.
     - https://github.com/skax-ca/eks-platform-gitops.git
-    # ── ALBC ──
-    # egress 확인 완료: repo-server 가 이 호스트에 닿는다(canary revision 3.5.0 · rendered 17).
+    # ALBC
     - https://aws.github.io/eks-charts
-    # ── Karpenter ──
-    # ⚠️ OCI registry 라 scheme 을 쓰지 않는다. Repository Secret·enableOCI 는 필요 없다.
+    # Karpenter. ⚠️ OCI registry 라 scheme 을 쓰지 않는다.
     - public.ecr.aws/karpenter
-    # ── ArgoCD 자기 관리 ──
-    # ArgoCD 가 **자기 자신의 차트**를 읽는다. 이 줄이 없으면 bootstrap/argocd-app.yaml 이
-    #    InvalidSpecError 로 sync 조차 서지 않는다.
-    # egress 확인 완료(canary): revision 10.3.0 · rendered 55 · conditions 없음.
+    # ArgoCD 자기 관리 — 이 줄이 없으면 bootstrap/argocd-app.yaml 이 sync 조차 서지 않는다.
     - https://argoproj.github.io/argo-helm
-    # ── Kyverno ──
-    # ⚠️ 컨트롤러(kyverno)와 정책(kyverno-policies) **두 차트가 같은 repo** 에 있다 ⇒ 줄은 하나다.
-    #    후행 슬래시는 upstream 이 index.yaml 을 그렇게 서빙하는 형태 그대로다.
+    # Kyverno. 엔진과 정책 두 차트가 같은 repo 에 있어 줄은 하나다. 후행 슬래시는 upstream 이
+    # index.yaml 을 서빙하는 형태 그대로다.
     - https://kyverno.github.io/kyverno/
-    # ── KEDA ──
-    # ②opt-in 카탈로그의 첫 항목이다. **가드레일은 분류와 무관하다** — baseline 이든 catalog 든
-    #    sourceRepos 에 등재되지 않으면 InvalidSpecError 다.
+    # KEDA
     - https://kedacore.github.io/charts
-    # ── Cluster Autoscaler ──
-    # ②opt-in 카탈로그. 로컬 HTTP 200 확인(egress canary 는 옵트인 전 별도 실행 필요 —
-    #    applicationsets/catalog/cluster-autoscaler.yaml 헤더 참조).
+    # Cluster Autoscaler
     - https://kubernetes.github.io/autoscaler
-    # ── Gateway API 표준 CRD ──
-    # ⚠️ 다른 항목과 달리 helm repo가 아니라 git repo(디렉토리 소스) — repoURL은 호스트가 아니라
-    #    저장소 전체를 가리킨다. egress canary는 아직 실행 전이라 실제 sync에서 처음 검증된다.
-    #    근거는 applicationsets/baseline/gateway-api-crds.yaml 헤더 참조.
-    #    ⛔ AWS 전용 Gateway CRD(TargetGroupConfiguration 등)는 여기 별도로 추가하지 않는다 —
-    #    aws-load-balancer-controller 차트 자신의 crds/ 폴더에 이미 들어있고 ArgoCD가 기본값
-    #    (skipCrds 미설정 = helm template --include-crds)으로 이미 설치한다(helm template
-    #    --include-crds 로컬 렌더로 확인) — 별도 Application을 만들면 같은 리소스를 두
-    #    Application이 동시에 소유하려는 충돌이 난다.
+    # Gateway API 표준 CRD. ⚠️ helm repo 가 아니라 git repo 라 repoURL 이 호스트가 아니라 저장소다.
     - https://github.com/kubernetes-sigs/gateway-api.git
 
-  # 등록된 클러스터만 허용 — hub(in-cluster) 는 고정 URL 하나, spoke(cross-account EKS) 는
-  # region 단위 glob 하나로 연다(아래 두 번째 항목). **새 클러스터를 등록해도 이 목록을
-  # 편집할 필요가 없다** — README "확장 규칙(O(1))" 이 실제로 O(1) 이 되는 지점이 여기다.
-  # namespace '*' — 플랫폼 계층은 kube-system·karpenter 등 시스템 ns 에 addon 을 배포한다.
+  # 새 클러스터를 등록해도 이 목록은 편집하지 않는다 — hub 는 고정 URL 하나, spoke 는 region
+  # 단위 glob 하나로 덮는다. namespace '*' 는 플랫폼 계층이 kube-system 등 시스템 ns 에 addon 을
+  # 배포하기 때문이다.
   destinations:
     # self-managed ArgoCD 는 자신이 도는 클러스터를 이 URL 로 가리킨다.
-    # ⚠️ 관리형 Capability 로 전환하면 EKS 클러스터 ARN 으로 바뀐다.
     - server: https://kubernetes.default.svc
       namespace: '*'
-    # spoke — cross-account EKS API endpoint. glob 이 필요한 이유: 이 값은 계정마다 다르고
-    #    **같은 클러스터라도 완전 재구축(destroy→apply) 하면 새로 발급된다**(cluster-secret.yaml
-    #    의 server·caData 를 매번 갱신해야 하는 것과 같은 이유, `eks-reference-infra`
-    #    `docs/spoke-lifecycle.md` 「재배포 시 GitOps 재등록」절 참조) — 정확한 값을 여기 박아두면
-    #    spoke 를 재구축할 때마다 이 파일도 같이 고쳐야 하는 함정이 생긴다. region(an2) 은 이
-    #    배포 전체가 고정하는 값이라 glob 도 거기까지만 고정한다.
-    # 🔑 계정·클러스터를 특정하지 않아도 안전한 이유 — destinations 는 유일한 게이트가 아니다.
-    #    실제 접근은 (1) 이 저장소에 cluster-secret.yaml 을 커밋할 git 권한, (2) spoke 의
-    #    `cross-account-trust-role` Role trust policy 로 이미 이중으로 막혀 있다. 여기서
-    #    막는 사고는 "저장소에 실수로 들어온 매니페스트" 지 "누가 인증됐는가" 가 아니다(위
-    #    self-managed 무게 설명과 같은 원칙).
-    # 확인(ArgoCD v3.5.0 소스 `pkg/apis/application/v1alpha1/app_project_types.go`
-    #    `isDestinationMatched` → `globMatch(item.Server, dst.Server, true)`): separators
-    #    인자를 넘기지 않는다 ⇒ `gobwas/glob` 이 `.` 을 구분자로 취급하지 않고 `*` 가 그대로
-    #    삼킨다. 즉 아래 패턴이 `https://<32자리 hex>.gr7.ap-northeast-2.eks.amazonaws.com`
-    #    형태(hub 에서 `aws eks describe-cluster --query cluster.endpoint` 로 확인) 전체와 매치된다.
+    # spoke — cross-account EKS API endpoint. 이 값은 계정마다 다르고 같은 클러스터라도 완전
+    #    재구축하면 새로 발급되므로, 정확한 값을 박아두면 재구축마다 이 파일도 고쳐야 한다.
+    #    region 까지만 고정하는 이유다. ArgoCD 의 glob 은 `.` 을 구분자로 보지 않아 `*` 가
+    #    endpoint 앞부분 전체를 삼킨다.
+    # 🔑 계정을 특정하지 않아도 안전한 것은 destinations 가 유일한 게이트가 아니기 때문이다.
+    #    실제 접근은 cluster-secret 을 커밋할 git 권한과 spoke 쪽 Role trust policy 가 막는다.
+    #    여기서 막는 사고는 "저장소에 실수로 들어온 매니페스트"다.
     - server: 'https://*.ap-northeast-2.eks.amazonaws.com'
       namespace: '*'
 
-  # 클러스터 스코프 리소스는 **기본 차단**으로 시작해 addon 마다 필요한 kind 만 연다
-  # ("실제 필요한 것으로 좁힌다").
+  # 기본 차단으로 시작해 addon 마다 필요한 kind 만 연다. 목록은 각 차트를 렌더해 cluster-scoped
+  # 항목을 추린 결과이고, 대부분의 addon 은 아래 ALBC 5종과 겹쳐 추가할 것이 없다.
   #
-  # 🔴 self-managed 에서 이 목록의 무게가 관리형보다 **무겁다**. argo-cd chart 기본값이
-  #    createClusterRoles=true + clusterRoleRules.enabled=false 라 application controller 가
-  #    이미 cluster-admin 이다 ⇒ apiserver 쪽에는 막는 층이 없고, **여기가 유일한 실질 가드레일**이다.
-  #    ⛔ "어차피 controller 가 cluster-admin 이니 형식"이라는 추론은 틀렸다 —
-  #    이 목록은 *저장소에 실수로 들어온 매니페스트* 를 막는 층이고, 그게 실제로 나는 사고다.
-  #
-  # ⚠️ 아래 목록은 추론이 아니라 **canary 확인 결과**다. 각 차트를 syncPolicy 없이
-  #    렌더해 status.resources 에서 namespace 가 없는 항목만 추렸다.
+  # 🔑 self-managed 에서 이 목록이 유일한 실질 가드레일이다. argo-cd 차트 기본값이 application
+  #    controller 에 cluster-admin 을 주므로 apiserver 쪽에는 막는 층이 없다. "어차피 cluster-admin
+  #    이니 형식"이 아니다 — 이 목록이 막는 것은 저장소에 실수로 들어온 매니페스트다.
   clusterResourceWhitelist:
-    # ── ALBC (cluster-scoped 5종) ──
-    - { group: apiextensions.k8s.io, kind: CustomResourceDefinition } # targetgroupbindings·ingressclassparams
+    # ALBC — 아래 5종이 다른 addon 대부분을 함께 덮는다.
+    - { group: apiextensions.k8s.io, kind: CustomResourceDefinition }
     - { group: rbac.authorization.k8s.io, kind: ClusterRole }
     - { group: rbac.authorization.k8s.io, kind: ClusterRoleBinding }
     - { group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration }
     - { group: admissionregistration.k8s.io, kind: MutatingWebhookConfiguration }
-    # ── Karpenter ──
-    # 컨트롤러 차트(1.14.0)의 cluster-scoped 는 CRD·ClusterRole·ClusterRoleBinding **3종뿐이고
-    #    위 ALBC 항목과 완전히 겹친다** ⇒ 추가할 것이 없다. webhook 은 v1 에서 사라졌다.
-    #    아래 둘은 컨트롤러가 아니라 **우리가 만드는 CR** 이다.
+    # Karpenter — 컨트롤러 차트는 위 5종에 다 걸린다. 아래 둘은 우리가 만드는 CR 이다.
+    # ⛔ karpenter.sh/NodeClaim 은 넣지 않는다. 컨트롤러가 NodePool 로부터 만드는 중간 리소스라
+    #    ArgoCD 가 배포하지 않는다. 틀렸다면 sync 시 "resource not permitted in project" 로 드러난다.
     - { group: karpenter.sh, kind: NodePool }
     - { group: karpenter.k8s.aws, kind: EC2NodeClass }
-    # ⛔ karpenter.sh/NodeClaim 은 **넣지 않았다.** 이것은 Karpenter 컨트롤러가 NodePool 로부터
-    #    만드는 중간 리소스이고 **ArgoCD 가 배포하지 않는다.** 최소권한이 원칙이므로 뺀다.
-    #    ⚠️ 만약 틀렸다면 신호는 명확하다 — sync 시 "resource not permitted in project".
-    #    그때 이 줄을 근거와 함께 추가한다.
-    # ── Cluster Autoscaler ──
-    # cluster-scoped 는 ClusterRole·ClusterRoleBinding 뿐이고(`helm template` 로컬 렌더로 확인,
-    #    CRD·APIService 없음) 둘 다 위 ALBC 항목과 겹친다 ⇒ 추가할 것이 없다(Karpenter와 같은 결론).
-    # ── Kyverno ──
-    # 🔴 **전용 ns addon 이 처음 들어오면서 Namespace 를 열어야 한다.**
-    #    CreateNamespace=true 로 자동 생성되는 Namespace 는 **이 목록의 검사를 받는다** —
-    #    argo-cd v3.5.0 소스로 확인: 그 ns 가 **같은 sync task 목록에 append** 되고
-    #    (gitops-engine `sync_context.go`) 목록 전체가 permissionValidator 를 거친다.
-    #    Namespace 는 Namespaced=false 라 clusterResourceWhitelist 로 판정된다(`controller/sync.go`).
-    #    ⚠️ **ns 가 이미 있으면 task 자체가 생기지 않아 검사도 없다**(`controller/sync_namespace.go`) ⇒
-    #       손으로 먼저 만들면 이 줄 없이도 통과하고 **두 번째 클러스터에서만** 깨진다. 그래서 지금 연다.
-    #    ✅ Kyverno·KEDA 공용이다.
+    # 전용 ns addon(Kyverno·KEDA)용. ⚠️ CreateNamespace=true 로 자동 생성되는 Namespace 도 이
+    #    목록의 검사를 받는다. ns 가 이미 있으면 검사 자체가 없어, 손으로 먼저 만들면 이 줄 없이도
+    #    통과하고 두 번째 클러스터에서만 깨진다.
     - { group: "", kind: Namespace }
-    # 컨트롤러 차트의 cluster-scoped 47종(CRD 22 · ClusterRole 17 · ClusterRoleBinding 8)은
-    #    **전부 위 ALBC 항목과 겹친다 ⇒ 추가 0건**(로컬 렌더로 확인).
-    #    🔑 whitelist 는 **kind 단위**라 "차트가 크다"와 "목록이 커진다"는 다른 질문이다.
-    # ⚠️ Kyverno 의 ValidatingWebhookConfiguration 은 **렌더 결과에 없다** — 컨트롤러가 런타임에
-    #    동적 등록한다. ArgoCD 가 소유하지 않으므로 여기 넣을 것이 없고, 뒤집으면
-    #    **웹훅이 잘못돼도 Application 은 Synced Healthy 로 보인다**(판정을 그것에만 의존하지 않는다).
-    # 아래는 컨트롤러가 아니라 **우리가 배포하는 정책 CR** 이다(kyverno-policies 차트, 11개).
+    # Kyverno 가 배포하는 정책 CR. ⚠️ Kyverno 의 ValidatingWebhookConfiguration 은 렌더 결과에
+    #    없다 — 컨트롤러가 런타임에 동적 등록하므로 ArgoCD 가 소유하지 않는다. 뒤집으면 웹훅이
+    #    잘못돼도 Application 은 Synced Healthy 로 보인다는 뜻이다.
     - { group: kyverno.io, kind: ClusterPolicy }
-    # ── KEDA ──
-    # 🔴 **이 목록에 오른 addon 중 유일하게 성격이 다른 리소스다.**
-    #    KEDA 가 v1beta1.external.metrics.k8s.io 를 등록한다 — 이것이 깨지면 **그 API 그룹 전체가 죽는다.**
-    #    ⚠️ 계층 1 의 metrics-server 는 v1beta1.metrics.k8s.io 라 **그룹이 달라 충돌하지 않는다.**
-    #    ⚠️ 지금은 external.metrics 를 소비하는 것이 없어 무해하지만, HPA 가 쓰기 시작하면
-    #       **KEDA 장애 = HPA 장애**다 ⇒ 그때 가용성 요구를 다시 본다(현재 replicas: 1).
+    # KEDA 의 external.metrics APIService. ⚠️ 이것이 깨지면 그 API 그룹 전체가 죽는다. 계층 1 의
+    #    metrics-server 와는 그룹이 달라 충돌하지 않는다. 지금은 소비자가 없어 무해하지만 HPA 가
+    #    쓰기 시작하면 KEDA 장애가 곧 HPA 장애다 — 그때 가용성 요구를 다시 본다(현재 replicas 1).
     - { group: apiregistration.k8s.io, kind: APIService }
-    # KEDA 의 나머지 cluster-scoped(CRD 6 · ClusterRole 4 · CRB 5 ·
-    #    ValidatingWebhookConfiguration 1)는 전부 위 ALBC 항목과 겹친다 ⇒ 추가 0건(렌더로 확인).
-    # ── Gateway API 표준 CRD ──
-    # 🔴 `config/crd/standard` 디렉토리가 "CRD 11개"가 아니라 CRD 10개 +
-    #    ValidatingAdmissionPolicy/Binding 1쌍(`gateway.networking.k8s.io_vap_safeupgrades.yaml`,
-    #    GatewayClass 재검증용 안전장치)이다. CRD 자체는 위 ALBC 항목(apiextensions.k8s.io/
-    #    CustomResourceDefinition)과 겹치지만 이 둘은 새 kind라 별도로 열어야 했다 — 실제
-    #    Application이 "is not permitted in project" InvalidSpecError로 막힌 뒤에야 드러났다.
+    # Gateway API 표준 CRD 디렉토리에 든 ValidatingAdmissionPolicy 한 쌍(GatewayClass 재검증용).
+    #    CRD 와 다른 kind 라 별도로 열어야 한다.
     - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicy }
     - { group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding }
-    # ── Gateway API 실사용 계층 (applicationsets/baseline/gateway.yaml) ──
-    # GatewayClass는 cluster-scoped다(Gateway·LoadBalancerConfiguration은 namespace-scoped라
-    #    아래 namespaceResourceWhitelist가 이미 커버한다 — 여기 추가할 것이 없다).
+    # GatewayClass. Gateway·LoadBalancerConfiguration 은 namespace-scoped 라 아래가 덮는다.
     - { group: gateway.networking.k8s.io, kind: GatewayClass }
 
   # namespace 스코프는 전면 허용 — 플랫폼 계층은 관리자 tier 다.
