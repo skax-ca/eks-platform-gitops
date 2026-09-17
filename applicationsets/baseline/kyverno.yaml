@@ -47,6 +47,9 @@ spec:
           #    우리 커스텀 정책도 ClusterPolicy 다.
           #    ⇒ 3.9 로 올릴 때 `policyType=ClusterPolicy` 를 명시할지, whitelist 와 커스텀 정책을
           #      함께 옮길지를 **승격 전에** 답한다. 버전 제약은 아니다(양쪽 다 k8s >= 1.25).
+          #    ⚠️ 명시로 버티는 쪽은 시한부다 — 3.9 차트 values 가 legacy kyverno.io 타입을
+          #       deprecated 로 표시하고 향후 릴리스에서 제거한다고 적는다. 미루는 만큼 CEL 전환
+          #       작업이 커진다.
           targetRevision: 3.8.2
           helm:
             valueFiles:
