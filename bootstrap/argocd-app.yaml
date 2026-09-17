@@ -18,8 +18,8 @@
 #
 # 위치도 `addons/baseline/` 이 아니다. 그 디렉토리의 계약은 "전 클러스터 팬아웃"이고
 # 이것은 hub 단일이다. seed 산출물인 argocd-values.yaml 과 **같은 자리**에 둔다.
-# ⚠️ root App 은 `path: .` + `recurse: true` 라 위치와 무관하게 흡수한다 —
-#    위치는 기능이 아니라 **사람이 읽는 의미**의 문제다.
+# ⚠️ root App 의 `include` 가 이 파일을 경로로 명시한다(bootstrap/root-app.yaml). 옮기면
+#    그 목록도 같이 고쳐야 root App 이 계속 흡수한다.
 # ─────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -65,10 +65,9 @@ spec:
         #    값으로 고정해 argocd-seed.sh 의 ARGOCD_RELEASE 와의 연결을 문서화한다.
         releaseName: argocd
         # $values 는 아래 `ref: values` source 를 가리킨다.
-        # 이 파일은 root-app 의 `exclude` 대상이기도 하다(bootstrap/root-app.yaml). **모순이 아니다** —
-        #    exclude 는 *root App 이 이것을 k8s 매니페스트로 오인하지 않게* 하는 설정이고,
-        #    여기서는 *다른 Application 의 다른 source 에서 helm values 로* 읽는다.
-        #    🔑 exclude 는 파일을 숨기는 것이 아니라 **한 Application 의 스캔 대상에서 빼는 것**이다.
+        # argocd-values.yaml 은 root-app 의 `include` 범위 밖이다(bootstrap/root-app.yaml).
+        #    root App 은 그것을 k8s 매니페스트로 읽지 않고, 여기서는 *다른 Application 의
+        #    다른 source 에서 helm values 로* 읽는다.
         valueFiles:
           - $values/bootstrap/argocd-values.yaml
 

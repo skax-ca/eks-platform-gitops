@@ -45,11 +45,7 @@ spec:
       source:
         # 이 저장소의 로컬 helm 차트다. ⚠️ ApplicationSet 의 fasttemplate 은 **Application spec** 에만
         #    적용되고 git 경로 안의 파일에는 적용되지 않는다 ⇒ per-cluster 값을 넘기려면 helm 이 필요하다.
-        #    ⛔ 그래서 이 경로의 파일들은 root-app 스캔에서 빠진다(차트를 매니페스트로 오인하면
-        #       sync 가 깨진다) — 어떻게 빠지는지는 README의 "root App 스캔에서 파일을 빼는 방법" 절 참조.
-        #       ⚠️ 그 마커 문자열을 이 주석에 그대로 적지 않는다 — 판정이 파일 전체 문자열
-        #       포함 검사라 적으면 **이 파일 자신**이 스캔에서 빠진다(실제 발생 확인 — 이 문장을
-        #       설명하는 주석 자체가 그 문자열을 포함해 이 사고를 낸 전례가 있다).
+        #    이 경로는 root-app 의 include 범위 밖이라 root App 이 차트 파일을 읽을 일이 없다.
         repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/karpenter/nodepool

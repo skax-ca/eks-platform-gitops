@@ -48,8 +48,7 @@ spec:
       project: platform
       source:
         # 이 저장소의 로컬 helm 차트다 — 이유는 addons/gateway/shared-gateway/Chart.yaml 참조.
-        # ⚠️ 그래서 이 경로의 파일들은 root-app 스캔에서 빠진다 — 마커 문자열을 이 주석에
-        # 그대로 적지 않는다(README "root App 스캔에서 파일을 빼는 방법" 절의 함정 참조).
+        # 이 경로는 root-app 의 include 범위 밖이라 root App 이 차트 파일을 읽을 일이 없다.
         repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/gateway/shared-gateway

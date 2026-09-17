@@ -17,7 +17,7 @@
 - [레이아웃](#레이아웃)
 - [부트스트랩 — 자기소멸(self-superseding) 원칙](#부트스트랩--자기소멸self-superseding-원칙)
 - [`bootstrap/argocd-seed.sh` — 이 저장소가 소유한다](#bootstrapargocd-seedsh--이-저장소가-소유한다)
-- [root App 스캔에서 파일을 빼는 방법 — 마커, `exclude` 아님](#root-app-스캔에서-파일을-빼는-방법--마커-exclude-아님)
+- [root App이 읽는 범위 — `include` allow-list](#root-app이-읽는-범위--include-allow-list)
 - [로컬 게이트 — 이 저장소의 유일한 강제 지점](#로컬-게이트--이-저장소의-유일한-강제-지점)
 - [알아야 할 규약](#알아야-할-규약)
   - [addon 네임스페이스 규칙](#addon-네임스페이스-규칙)
@@ -56,15 +56,16 @@ Application / ApplicationSet / AppProject 자체는 양쪽이 동일하다.
 
 ```
 bootstrap/root-app.yaml      # App-of-Apps root — seed 대상. 이후 자기 자신을 흡수
-bootstrap/argocd-values.yaml # ArgoCD 자신의 helm values. root App 스캔에서 제외됨
+bootstrap/argocd-values.yaml # ArgoCD 자신의 helm values. root App include 범위 밖
 bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application. 위 values를 $values로 읽는다
 bootstrap/argocd-seed.sh     # seed 실행 스크립트. 이 저장소가 소유한다(아래 절)
 clusters/<env>/<cluster>/    # cluster Secret + per-cluster values. 새 클러스터 = 디렉토리 1개(O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
 addons/baseline/             # 전 클러스터 팬아웃 ApplicationSet(environment 라벨)
 addons/catalog/              # opt-in 카탈로그 — 구독한 클러스터만(addon-<name> 라벨)
-addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트. root App 스캔에서 제외됨
-addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPolicy. 로컬 helm 차트, root App 스캔에서 제외됨
+addons/gateway/shared-gateway/  # GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
+addons/karpenter/nodepool/   # NodePool/EC2NodeClass 로컬 helm 차트(per-cluster 값 주입)
+addons/kyverno/custom-policies/ # 이 저장소가 직접 소유하는 ClusterPolicy 매니페스트
 scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬 게이트" 절)
 .githooks/                   # pre-commit 훅
 ```
@@ -108,54 +109,30 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬
 
 ---
 
-## root App 스캔에서 파일을 빼는 방법 — 마커, `exclude` 아님
+## root App이 읽는 범위 — `include` allow-list
 
-`bootstrap/root-app.yaml`은 저장소 루트를 재귀로 스캔해 모든 `.yaml`/`.yml`/`.json`을 매니페스트로
-적용한다. `addons/karpenter/nodepool/`의 helm 템플릿(`{{name}}` 등 미치환 문법)처럼 **매니페스트가
-아닌 파일**은 스캔에서 빠져야 한다.
+`bootstrap/root-app.yaml`은 `directory.include`에 적힌 경로만 매니페스트로 읽는다. 지금은
+`projects/`·`clusters/**/cluster-secret.yaml`·`addons/baseline/`·`addons/catalog/`·`bootstrap/`의
+두 Application 파일이다. **그 밖은 무엇이든 무시한다** — `addons/<addon>/<dir>/`의 로컬 차트와 CR
+매니페스트(전담 ApplicationSet이 따로 읽는다), `clusters/**/values.yaml`을 비롯한 helm values,
+도구 파일 전부.
 
-⛔ **`root-app.yaml`의 `exclude` 목록을 늘리지 않는다.** 대신 파일 안에
-`+argocd:skip-file-rendering` 마커를 넣는다.
+이 저장소는 `exclude`와 `+argocd:skip-file-rendering` 마커를 쓰지 않는다. 둘 다 deny-list라
+저장소에 파일이 늘 때마다 **클러스터에 적용된 현재 spec**이 렌더할 범위가 넓어지고, root App은
+자기 spec을 옛 spec으로 렌더한 뒤에야 갱신하므로 옛 spec이 못 거르는 파일이 생기면 자기 갱신이
+막힌다. 마커는 판정이 파일 전체 문자열 포함 검사라 마커를 **설명하는 주석**이 있는 파일까지
+조용히 빠지는 문제가 하나 더 있다. 근거는 `iac-module-library`의
+`docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」.
 
-- 평문 YAML(`Chart.yaml`·`values.yaml`): `# +argocd:skip-file-rendering`
-- helm 템플릿: `{{- /* +argocd:skip-file-rendering … */ -}}`(파일 내용에는 남고 렌더 출력에는
-  안 남는다)
+매니페스트 디렉토리를 새로 만들면 `include`에 한 줄 더한다. 이미 있는 디렉토리 안에서 파일이
+늘고 주는 것은 `root-app.yaml`과 무관하다. ⚠️ **렌더가 깨지는 파일이 든 경로**를 `include`에
+넣으면 그 spec이 적용된 뒤부터 자기 갱신이 멈춘다. 그 파일을 고치는 커밋이 풀거나,
+`argocd-seed.sh --from 5 --to 5`로 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
 
-🔴 **`exclude`를 늘리면 데드락을 만들 수 있다.**
-1. root App은 자기 spec을 git에서 읽어 갱신하려면 먼저 저장소를 렌더해야 한다.
-2. 그 렌더는 **아직 적용되지 않은 옛 `exclude`**로 수행된다.
-3. 새 `exclude`가 걸러야 할 파일을 옛 `exclude`가 못 걸러내면 렌더가 실패한다.
-4. 렌더가 실패하니 새 `exclude`는 영원히 적용되지 않는다.
-
-마커는 파일 자신 안에 있어 이 순서 문제 자체가 없다.
-
-🔴 **마커의 함정 — 마커를 설명하는 주석도 마커다.** 판정은 파일 전체의 단순 문자열 포함 검사라, 주석이든
-문서든 그 문자열이 한 번이라도 나타나면 파일 전체가 스캔에서 빠진다.
-
-- `root-app.yaml` 자신의 주석에 마커 문자열을 그대로 적으면 **root-app이 자기 자신을 스캔에서 제외**한다 —
-  에러 없이 조용히, 영구 `OutOfSync`로만 드러난다.
-- ⇒ 마커 문자열은 `.md` 문서(스캔 대상 확장자가 아니다)나 실제로 제외할 파일에만 적는다. 다른 `.yaml`에는
-  *"README의 root App 스캔 절 참조"*로만 가리킨다.
-
-**자기 점검**(의도 밖 파일이 마커를 물고 있지 않은지):
-```bash
-grep -rl 'argocd:skip-file-rendering' --include='*.yaml' --include='*.yml' --include='*.json' . \
-  | grep -v -e 'addons/karpenter/nodepool/' -e 'addons/kyverno/custom-policies/' -e 'addons/gateway/shared-gateway/'
-```
-출력이 있으면 해당 파일이 조용히 스캔에서 빠지고 있다는 뜻이다. 새 로컬 helm 차트 디렉토리를 추가하면
-이 `-e` 목록에도 경로를 더한다 — 안 그러면 이 명령 자체가 정상 마커를 "문제"로 오탐한다.
-
-⚠️ **마커는 root-app만 빼는 게 아니라 "Directory 타입으로 이 파일을 읽는 모든 Application"에서 뺀다.**
-
-- 어떤 디렉토리를 전담하는 Application이 있어도, `Chart.yaml`이 없어 Directory 타입으로 잡히면
-  **그 Application도 자기 담당 파일을 스스로 걸러버린다.**
-- 증상: 적용 리소스 0개인 채로 `Synced`/`Healthy`로 보이는 조용한 실패라 알아채기 어렵다
-  (`addons/kyverno/custom-policies/`에서 실제 발생).
-- 대응: 전담 Application이 있는 디렉토리는 클러스터별 값이 갈리지 않아도 `Chart.yaml`을 둬서 Helm
-  타입으로 인식되게 한다 — 마커는 텍스트 스캔이라 Helm 렌더링 엔진은 그냥 주석으로 무시한다.
-
-**`argocd-seed.sh`는 `.sh`라 애초에 directory 소스의 스캔 대상(`.yaml`/`.yml`/`.json`)이 아니다** —
-그래서 `exclude`에도, 마커에도 넣지 않는다.
+`addons/<addon>/<dir>/`가 helm 차트인지 평문 매니페스트인지는 **per-cluster 값을 주입하는지**로만
+정한다. ApplicationSet의 fasttemplate은 Application spec에만 적용되고 git 경로 안의 파일에는
+적용되지 않으므로, cluster generator의 값을 CR에 넣으려면 helm이 필요하다(`shared-gateway`·
+`karpenter/nodepool`). 주입할 값이 없으면 평문이다(`kyverno/custom-policies`).
 
 ---
 
@@ -183,10 +160,6 @@ brew install shellcheck        # 셸 게이트가 요구한다. 없으면 훅이
 ```bash
 python3 scripts/validate-comment-conventions.py
 ```
-
-⚠️ 검사기와 훅이 `.py`와 확장자 없는 파일인 것은 우연이 아니다. `bootstrap/root-app.yaml`의
-root App이 `path: .` + `recurse: true`라 **저장소 어디에 두든 `.yaml`은 매니페스트로
-흡수된다** — 도구를 `.yaml`로 만들면 그 자체가 클러스터에 실린다.
 
 staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종료코드)가 함께 돈다.
 `bootstrap/argocd-seed.sh`는 workbench에서 사람이 손으로 돌리는 스크립트라, 깨진 채 머지되면

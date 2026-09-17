@@ -8,10 +8,7 @@
 # **②와 별도 Application 인 이유는 소유권이다.** ②는 업스트림 차트 하나로 source 가 고정돼
 #    있어 임의의 새 정책을 주입할 수 없다. 그래서 우리가 직접 만든 정책은 형제 Application 으로
 #    따로 둔다(`addons/kyverno/custom-policies/`).
-#    ⚠️ 그 경로가 **로컬 helm 차트**인 이유는 값이 갈려서가 아니다. `Chart.yaml` 이 있어야 이
-#       Application 자신이 Helm 타입으로 인식돼 skip-file-rendering 마커가 "root-app 만 제외"로
-#       동작한다. Chart.yaml 없이 plain 매니페스트로 뒀다가 이 Application 자신도 Directory
-#       타입으로 잡혀 **자기 담당 파일을 걸러버린** 사고가 있었다(Karpenter NodePool 과 같은 이유).
+#    그 경로는 평문 매니페스트 디렉토리다 — 클러스터마다 값이 갈리지 않아 주입할 것이 없다.
 #
 # **uniform 인 이유**: `targetRevision: main` 이라 승격할 버전이 없다. ①②가 staged 로 나뉘어도
 #    이 파일은 나누지 않는다.
@@ -54,10 +51,8 @@ spec:
     spec:
       project: platform
       source:
-        # 이 저장소가 직접 소유하는 정책 — 로컬 helm 차트(addons/kyverno/custom-policies/,
-        # Chart.yaml 존재)라서 이 Application은 Helm 타입으로 렌더링되고, root-app의
-        # 최상위 Directory 스캔만 templates/ 안의 마커로 걸러진다. 값이 갈리지 않는데도
-        # 차트인 이유는 Chart.yaml 헤더 참조.
+        # 이 저장소가 직접 소유하는 정책 — 평문 매니페스트 디렉토리다. root-app 의 include
+        # 범위 밖이라 root App 이 이 파일을 읽을 일이 없다.
         repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
         path: addons/kyverno/custom-policies

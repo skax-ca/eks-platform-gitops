@@ -1,4 +1,3 @@
-{{- /* +argocd:skip-file-rendering — root-app 스캔 제외. 렌더 출력에는 남지 않는다 */ -}}
 # GatewayClass는 cluster-scoped라 클러스터마다 독립된 객체다 — ApplicationSet이 클러스터별로
 # 하나씩 만드는 게 맞다(ALBC도 클러스터마다 독립 배포이므로 대칭이다).
 apiVersion: gateway.networking.k8s.io/v1

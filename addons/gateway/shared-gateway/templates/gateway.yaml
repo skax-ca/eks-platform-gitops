@@ -1,4 +1,3 @@
-{{- /* +argocd:skip-file-rendering — root-app 스캔 제외. 렌더 출력에는 남지 않는다 */ -}}
 # ⚠️ 이 리소스가 apply되는 순간 실제 ALB가 AWS에 생성된다(HTTPRoute 존재 여부와 무관 —
 #    AWS 공식 문서: "An AWS Application Load Balancer (ALB) is provisioned ... At this stage,
 #    the ALB is active but does not yet have any configured listeners."). GatewayClass만

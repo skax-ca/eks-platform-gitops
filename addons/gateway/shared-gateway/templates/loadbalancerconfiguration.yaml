@@ -1,4 +1,3 @@
-{{- /* +argocd:skip-file-rendering — root-app 스캔 제외. 렌더 출력에는 남지 않는다 */ -}}
 {{- $environment := required "environment 가 비어 있다 — cluster Secret 의 environment 라벨에서 온다" .Values.environment -}}
 # LoadBalancerConfiguration은 Gateway와 같은 네임스페이스에 있어야 한다(AWS 공식 문서 —
 # Gateway.spec.infrastructure.parametersRef가 namespace를 받지 않고 같은 ns로 고정 해석한다).
