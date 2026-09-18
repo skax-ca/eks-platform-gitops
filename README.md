@@ -239,6 +239,12 @@ staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종�
 - ⚠️ **cluster Secret의 `project` 필드 주의** — 값을 지정하면 그 프로젝트에서만 쓸 수 있는
   project-scoped cluster가 된다. `platform`과 어긋나면 클러스터가 `unknown`으로 뜨는데 증상이
   원인을 가리키지 않는다.
+- ⚠️ **`sourceRepos`는 제3 가드레일이다** — Application의 `repoURL`이 여기 없으면
+  `InvalidSpecError`로 sync 자체가 안 선다. addon을 추가할 때마다 그 chart repo를 추가한다.
+- ⚠️ **`clusterResourceWhitelist`는 `[]`로 시작한다** — addon마다 그 addon이 실제로 만드는 kind만
+  명시 개방한다.
+- **cert-manager · external-dns · 관측성 컨트롤러는 여기 없다** — Terraform community addon 소관이고,
+  이 저장소에는 그 설정(CR·애노테이션)만 놓인다.
 
 ### cluster Secret 라벨 계약
 
@@ -254,12 +260,6 @@ ApplicationSet이 읽는 라벨이다. 빠지면 그 addon만 조용히 안 뜬�
 
 ⚠️ **teardown은 매칭 라벨을 먼저 뗀 뒤 Secret을 지운다.** git 이력의 마지막 cluster-secret을 그대로
 되살리면 라벨이 빠진 껍데기이고, 그 상태로는 Application이 하나도 생기지 않는다.
-- ⚠️ **`sourceRepos`는 제3 가드레일이다** — Application의 `repoURL`이 여기 없으면
-  `InvalidSpecError`로 sync 자체가 안 선다. addon을 추가할 때마다 그 chart repo를 추가한다.
-- ⚠️ **`clusterResourceWhitelist`는 `[]`로 시작한다** — addon마다 그 addon이 실제로 만드는 kind만
-  명시 개방한다.
-- **cert-manager · external-dns · 관측성 컨트롤러는 여기 없다** — Terraform community addon 소관이고,
-  이 저장소에는 그 설정(CR·애노테이션)만 놓인다.
 
 ### addon 네임스페이스 규칙
 
@@ -275,7 +275,7 @@ ApplicationSet이 읽는 라벨이다. 빠지면 그 addon만 조용히 안 뜬�
 | 2 | ALBC도 공식이 `kube-system` — AWS EKS User Guide·upstream kubernetes-sigs 둘 다 | 관례 |
 | 3 | Pod Identity association이 이미 `kube-system` | 집행 장치 — 어기면 자격증명이 안 붙는다 |
 
-⚠️ **`cluster-autoscaler`는 이 표의 바를 통과하지 못한 채로 예외에 들어갔다.** 공식 문서 근거도
+⚠️ **`cluster-autoscaler`는 이 표의 기준을 충족하지 못한 채로 예외에 들어갔다.** 공식 문서 근거도
 APF 같은 기술적 강제도 없다.
 
 - 순서: Terraform 쪽 Pod Identity association을 `kube-system/cluster-autoscaler`로 **먼저** 고정
@@ -293,11 +293,11 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 
 ## 현재 배포된 addon
 
-**baseline vs catalog 판단 기준**: Terraform 쪽 `enable_*` 기본값을 따르지 않는다 —
-`aws-load-balancer-controller`가 반증 사례다(Terraform 기본값은 `false`인데도 baseline). 가르는
-축은 **워크로드 아키텍처와 무관하게 플랫폼이 보편적으로 요구하는가**다.
+**baseline vs catalog 판단 기준**: **워크로드 아키텍처와 무관하게 플랫폼이 보편적으로 요구하는가**.
+Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer-controller`는 Terraform
+기본값이 `false`인데도 baseline이다.
 
-- **baseline**(ALBC·Karpenter·Kyverno·Gateway API): 전 클러스터에 무조건 배포.
+- **baseline**(ALBC·Karpenter·Kyverno·Gateway API): 전 클러스터에 배포.
 - **catalog**(KEDA·cluster-autoscaler): 특정 아키텍처를 선택한 클러스터만 `addon-<name>: enabled`
   라벨로 구독.
 
