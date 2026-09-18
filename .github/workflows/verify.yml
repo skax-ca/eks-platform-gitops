@@ -1,0 +1,96 @@
+# verify: 매니페스트를 클러스터 없이 검증한다. PR·main push에서 돈다.
+#
+# 이 저장소는 push가 곧 apply다(targetRevision main + automated). 클러스터가 살아 있을 때 깨진
+# 매니페스트가 main에 들어가면 ArgoCD가 3분 안에 그것을 적용하므로, 막는 자리는 머지 전뿐이다.
+# 검증 4개는 전부 오프라인이다. ArgoCD 렌더(argocd app manifests)는 클러스터가 필요해 seed 뒤의
+# argocd app diff가 맡는다.
+#   1. 로컬 훅(.githooks/pre-commit)과 같은 것: 주석 규칙 검사기, bash -n·shellcheck
+#   2. YAML 전체 파싱. 차트 templates/는 Go 템플릿이라 뺀다(렌더가 본다)
+#   3. 로컬 차트 helm lint·template. required 값은 ApplicationSet이 cluster Secret 라벨에서
+#      주입하는 것이라 여기서는 대표값을 --set으로 준다(seed의 --set 금지와 무관하다. 렌더일 뿐이다)
+#   4. kyverno test. 커스텀 정책의 통과·거부·제외를 tests/kyverno/의 픽스처로 판정한다.
+#      CLI 버전은 kyverno 차트의 appVersion과 같아야 한다(applicationsets/baseline/kyverno.yaml)
+# ⚠️ 훅과 명령이 같아야 한다. 여기서만 막히면 둘 중 하나가 틀린 것이다.
+
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 읽기 전용이라 앞선 run을 취소해도 안전하다.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  SHELLCHECK_VERSION: "v0.11.0"
+  KYVERNO_VERSION: "v1.19.1"
+
+jobs:
+  conventions:
+    name: 주석·셸 게이트
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: 주석 규칙
+        run: python3 scripts/validate-comment-conventions.py
+
+      - name: 셸 문법·정적 검사
+        run: |
+          # apt의 shellcheck는 구버전이라 판정이 다르다. 훅과 같은 결과여야 하므로 로컬과 같은
+          # 버전을 릴리스 바이너리로 받는다.
+          curl -sSfL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            | tar -xJ --strip-components=1 -C /usr/local/bin "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          for f in bootstrap/*.sh .githooks/pre-commit; do
+            [ -f "$f" ] || continue
+            bash -n "$f"
+            shellcheck -x "$f"
+          done
+
+  manifests:
+    name: 매니페스트 게이트
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: YAML 파싱
+        run: |
+          python3 - <<'EOF'
+          import glob, sys, yaml
+          files = sorted(set(glob.glob('**/*.yaml', recursive=True)) | set(glob.glob('**/*.yml', recursive=True)))
+          bad = 0
+          for f in files:
+              if '/templates/' in f:
+                  continue
+              try:
+                  list(yaml.safe_load_all(open(f)))
+              except Exception as e:
+                  bad += 1
+                  print(f'FAIL {f}: {e}')
+          print(f'{len(files)} files, {bad} failed')
+          sys.exit(1 if bad else 0)
+          EOF
+
+      - name: 로컬 차트 lint·template
+        run: |
+          helm version --short
+          for tier in prd nonprd; do
+            helm lint addons/karpenter/nodepool --set clusterName=eks-x,nodeRole=role-x,tier="$tier" --quiet
+            helm template t addons/karpenter/nodepool --set clusterName=eks-x,nodeRole=role-x,tier="$tier" >/dev/null
+          done
+          helm lint addons/gateway/shared-gateway --set environment=dev --quiet
+          helm template t addons/gateway/shared-gateway --set environment=dev >/dev/null
+
+      - name: kyverno test
+        run: |
+          curl -sSfL "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz" \
+            | tar -xz -C /usr/local/bin kyverno
+          kyverno version
+          kyverno test tests/kyverno

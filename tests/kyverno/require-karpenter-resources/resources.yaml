@@ -1,0 +1,71 @@
+# require-karpenter-resources 정책의 픽스처. 이름이 기대 판정을 말한다: pass-*는 통과,
+# fail-*은 거부, skip-*은 namespaceSelector 제외. 기대값은 kyverno-test.yaml이 갖는다.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pass-complete
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: nginx
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+        limits: {memory: 128Mi}
+  initContainers:
+    - name: init
+      image: busybox
+      resources:
+        requests: {cpu: 50m, memory: 32Mi}
+        limits: {memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-no-requests
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: nginx
+---
+# cpu limit은 정책이 요구하지 않는다. memory limit이 없는 것이 거부 사유다.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-no-memory-limit
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: nginx
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+        limits: {cpu: 200m}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-init-no-resources
+  namespace: apps
+spec:
+  containers:
+    - name: app
+      image: nginx
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+        limits: {memory: 128Mi}
+  initContainers:
+    - name: init
+      image: busybox
+---
+# 같은 위반이라도 argocd 네임스페이스는 selector가 뺀다. ArgoCD 자신이 막히면 고칠 수단을 잃는다.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: skip-argocd
+  namespace: argocd
+spec:
+  containers:
+    - name: app
+      image: nginx

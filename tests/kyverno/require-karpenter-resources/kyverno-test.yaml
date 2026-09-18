@@ -1,0 +1,19 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: require-karpenter-resources
+policies:
+  - ../../../addons/kyverno/custom-policies/require-karpenter-resources.yaml
+resources:
+  - resources.yaml
+variables: values.yaml
+results:
+  - policy: require-karpenter-resources
+    resources: [pass-complete]
+    result: pass
+  - policy: require-karpenter-resources
+    resources: [fail-no-requests, fail-no-memory-limit, fail-init-no-resources]
+    result: fail
+  - policy: require-karpenter-resources
+    resources: [skip-argocd]
+    result: skip

@@ -13,7 +13,7 @@ set -euo pipefail
 changed=$(git diff --cached --name-only --diff-filter=ACMR)
 
 targets=$(printf '%s\n' "$changed" |
-  grep -E '^(applicationsets|addons|projects|clusters|bootstrap)/.*\.(yaml|sh)$|\.md$|^scripts/.*\.py$|^\.githooks/' || true)
+  grep -E '^(applicationsets|addons|projects|clusters|bootstrap|tests)/.*\.(yaml|sh)$|\.md$|^scripts/.*\.py$|^\.githooks/|^\.github/workflows/.*\.yml$' || true)
 
 [ -z "$targets" ] && exit 0
 

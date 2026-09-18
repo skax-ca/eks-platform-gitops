@@ -21,7 +21,7 @@
 - [ApplicationSet 공통 규약](#applicationset-공통-규약)
   - [staged 전파 — `-prd` · `-nonprd` 두 블록](#staged-전파---prd---nonprd-두-블록)
 - [helm values — `addons/<addon>/values.yaml`](#helm-values--addonsaddonvaluesyaml)
-- [로컬 게이트 — 이 저장소의 유일한 강제 지점](#로컬-게이트--이-저장소의-유일한-강제-지점)
+- [게이트 — 로컬 훅과 CI](#게이트--로컬-훅과-ci)
 - [알아야 할 규약](#알아야-할-규약)
   - [cluster Secret 라벨 계약](#cluster-secret-라벨-계약)
   - [addon 네임스페이스 규칙](#addon-네임스페이스-규칙)
@@ -72,8 +72,10 @@ addons/<addon>/values.yaml   #   업스트림 차트 helm values. 티어 쌍이 
 addons/gateway/shared-gateway/  #   GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
 addons/karpenter/nodepool/   #   NodePool/EC2NodeClass 로컬 helm 차트(per-cluster 값 주입)
 addons/kyverno/custom-policies/ #   이 저장소가 직접 소유하는 ValidatingPolicy 매니페스트
-scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬 게이트" 절)
+scripts/                     # 주석 규칙 검사기(.py다 — 아래 "게이트" 절)
 .githooks/                   # pre-commit 훅
+.github/workflows/verify.yml # CI. 훅과 같은 검사 + YAML 파싱·차트 렌더·kyverno test
+tests/kyverno/               # 커스텀 정책 픽스처. Application source 경로 밖이라 클러스터에 가지 않는다
 ```
 
 **확장 규칙(O(1))**: 새 클러스터는 `clusters/<env>/<cluster>/` 1개만 추가하면 cluster generator가
@@ -181,17 +183,18 @@ staged addon(ALBC · Karpenter · Kyverno)은 prd·nonprd 두 ApplicationSet이 
 
 ---
 
-## 로컬 게이트 — 이 저장소의 유일한 강제 지점
+## 게이트 — 로컬 훅과 CI
 
-이 저장소에는 CI가 없다. ArgoCD가 `main`을 pull로 reconcile할 뿐이라 **커밋 전 훅이 아니면
-아무것도 막지 못한다.** clone마다 한 번 켠다.
+이 저장소는 push가 곧 apply다. ArgoCD가 `main`을 pull로 reconcile하므로, 깨진 매니페스트를
+막는 자리는 **머지 전**뿐이다. 두 층이 있다. 커밋 전 훅(clone마다 한 번 켠다)과, 같은 검사에
+오프라인 렌더·정책 판정을 더해 PR·main push에서 도는 `.github/workflows/verify.yml`이다.
 
 ```bash
 git config core.hooksPath .githooks
 brew install shellcheck        # 셸 게이트가 요구한다. 없으면 훅이 즉시 실패한다
 ```
 
-`.githooks/pre-commit`이 staged 파일 중 `applicationsets/`·`addons/`·`projects/`·`clusters/`·`bootstrap/`의
+`.githooks/pre-commit`이 staged 파일 중 `applicationsets/`·`addons/`·`projects/`·`clusters/`·`bootstrap/`·`tests/`의
 `.yaml`/`.sh`, 저장소 `.md`, `scripts/*.py`, `.githooks/*`를 골라
 `scripts/validate-comment-conventions.py`에 넘긴다. 검사기는 주석에 **외부 참조**(문서 절
 번호·결정 식별자)와 **이력 서술**(날짜·세션 번호, 그리고 측정을 사건으로 적은 서술)이 있는지만
@@ -210,10 +213,19 @@ staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종�
 `bootstrap/argocd-seed.sh`는 workbench에서 사람이 손으로 돌리는 스크립트라, 깨진 채 머지되면
 부트스트랩 한가운데서 드러난다.
 
-⛔ 매니페스트 렌더 결과는 검사하지 않는다. 그것은 ArgoCD가 sync 시점에 판정하고, 훅에서
-흉내 내면 두 판정이 갈린다.
+`verify.yml`은 훅과 같은 검사(주석 규칙·`bash -n`·`shellcheck -x`, 버전을 로컬과 같게 핀)에
+세 가지를 더한다. **YAML 전체 파싱**(차트 `templates/`는 Go 템플릿이라 제외), **로컬 차트
+`helm lint`·`helm template`**(`required` 값은 ApplicationSet이 cluster Secret 라벨에서 주입하는
+것이라 대표값을 `--set`으로 준다. 렌더일 뿐 seed가 아니다), **`kyverno test`**(`tests/kyverno/`의
+픽스처로 커스텀 정책의 통과·거부·제외를 판정한다. CLI 버전은 kyverno 차트의 appVersion과 같아야
+한다). 픽스처는 어떤 Application의 source 경로에도 들어가지 않는 `tests/`에 둔다 — `addons/`
+아래 두면 Directory 타입 Application이 파드 픽스처를 클러스터에 적용한다.
 
-의도적 우회는 `git commit --no-verify`이고, 사유를 커밋 메시지에 남긴다.
+⛔ ArgoCD의 렌더(Application 조립·파라미터 주입·`include` 판정)는 흉내 내지 않는다. 그것은
+클러스터에서 ArgoCD가 판정하고, seed 뒤 `argocd app diff`가 그 자리다. CI가 보는 것은 차트와
+정책 파일 자체다.
+
+의도적 우회는 `git commit --no-verify`이고, 사유를 커밋 메시지에 남긴다. CI는 우회하지 않는다.
 
 `aks-platform-gitops`가 같은 게이트를 같은 내용으로 갖는다. 한쪽을 고치면 다른 쪽도 함께
 고친다 — 드리프트를 검사하는 장치는 없다.
