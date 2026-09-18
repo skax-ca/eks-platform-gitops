@@ -16,7 +16,8 @@ spec:
   project: platform
 
   source:
-    # self-managed 는 GitHub 를 직접 읽는다. 인증은 GitHub App repository Secret 이다.
+    # self-managed 는 GitHub 를 직접 읽는다. 저장소가 public 이라 repository Secret 이 없고,
+    # private 으로 돌아가면 이 Application 은 Unknown 에 머문다.
     repoURL: https://github.com/skax-ca/eks-platform-gitops.git
     targetRevision: main
     path: .
@@ -32,7 +33,8 @@ spec:
       #    매니페스트 디렉토리를 새로 만들면 한 줄 더한다.
       # ⚠️ 렌더가 깨지는 파일이 든 경로를 여기 넣으면 그 spec 이 적용된 뒤부터 자기 갱신이 멈춘다.
       #    root App 은 자기 spec 을 클러스터에 적용된 옛 spec 으로 렌더한 뒤에야 갱신하기 때문이다.
-      #    그 파일을 고치는 커밋이 풀거나, argocd-seed.sh --from 5 --to 5 로 커밋본을 다시 apply 한다.
+      #    그 파일을 고치는 커밋이 풀거나, argocd-seed.sh 의 root Application 단계만 다시 돌려
+      #    커밋본을 apply 한다.
       include: '{projects/*.yaml,clusters/**/cluster-secret.yaml,applicationsets/**/*.yaml,bootstrap/root-app.yaml,bootstrap/argocd-app.yaml}'
 
   destination:

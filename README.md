@@ -38,7 +38,7 @@
 | 갈림점 | 지금(self-managed) | 관리형으로 바꾸면 |
 |---|---|---|
 | cluster Secret `server` | `https://kubernetes.default.svc` | EKS 클러스터 ARN |
-| `repoURL` | GitHub 직접 + GitHub App | CodeConnections 프록시 URL(계정·리전·커넥션 ID 포함) |
+| `repoURL` | GitHub 직접(public 저장소, 자격증명 없음) | CodeConnections 프록시 URL(계정·리전·커넥션 ID 포함) |
 | AppProject `destinations.server` | `https://kubernetes.default.svc` | EKS 클러스터 ARN |
 
 Application / ApplicationSet / AppProject 자체는 양쪽이 동일하다.
@@ -86,32 +86,31 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "로컬
 최초 1회 workbench에서 seed한 뒤, root App이 그 리소스들을 **자기 소유로 흡수**한다.
 
 ```
-0. helm install argo-cd          (workbench, 사람)   ← self-managed 고유
-1. Access Entry                  ⛔ 불필요 — ArgoCD가 클러스터 안에 있다(spoke는 필요)
-2. GitHub App repository Secret  (kubectl seed)
-3. projects/platform.yaml        (kubectl seed)
-4. clusters/.../cluster-secret.yaml (kubectl seed)
-5. bootstrap/root-app.yaml       (kubectl seed) → 자기 자신을 흡수
-6. 이후 전부                      GitOps(pull) — argocd chart 자체도 Application으로 흡수
+1. helm install argo-cd          (workbench, 사람)   ← self-managed 고유
+2. projects/platform.yaml        (kubectl seed)
+3. clusters/.../cluster-secret.yaml (kubectl seed)
+4. bootstrap/root-app.yaml       (kubectl seed) → 자기 자신을 흡수
+   이후 전부                      GitOps(pull) — argocd chart 자체도 Application으로 흡수
 ```
 
+관리형 ArgoCD에 있는 두 단계가 여기에는 없다. Access Entry는 ArgoCD가 클러스터 안에 있어
+불필요하고(spoke는 필요), repository Secret은 저장소가 public이라 ArgoCD가 익명으로 읽는다.
+seed가 GitOps 관리 밖에 남기는 리소스는 없다.
+
 - **손으로 apply하는 매니페스트는 저장소에 커밋된 것과 바이트 단위로 동일해야 한다.** 그래야 root App이 첫 sync에서 흡수해 즉시 no-op이 된다 — 다르면 그 차이가 영구 드리프트로 남는다.
-- ⛔ **helm values도 예외 없음(0단계)**: `helm install -f`에 넘기는 값은 저장소 파일 그대로 써야 하며, `--set`은 쓰지 않는다.
+- ⛔ **helm values도 예외 없음**: `helm install -f`에 넘기는 값은 저장소 파일 그대로 써야 하며, `--set`은 쓰지 않는다.
 - ⛔ **완료 조건**: 초기 비밀번호 교체 + `argocd-initial-admin-secret` 삭제.
 
 ## `bootstrap/argocd-seed.sh` — 이 저장소가 소유한다
 
 고칠 일이 생기면 여기서 고친다. 다른 저장소로 복사하지 않는다.
 
-실행하는 곳이 workbench 하나이고, workbench는 이 저장소만 클론한다. ArgoCD를 여는 GitHub App의
-설치 범위가 이 저장소 하나여서(배포 코드까지 읽게 하지 않으려는 제약) 다른 저장소는 workbench에
-도달하지 않는다.
+실행하는 곳이 workbench 하나이고, workbench는 이 저장소만 클론한다. 저장소가 public이라 클론에도
+ArgoCD의 읽기에도 자격증명이 없다. 스크립트는 preflight에서 `root-app.yaml`의 `repoURL`을 익명으로
+`ls-remote`해 그 전제를 확인한다 — 저장소가 private으로 돌아가면 sync가 조용히 멈추기 때문이다.
 
 ⚠️ `aks-platform-gitops`의 같은 이름 파일과 형제가 아니다. 클라우드마다 독립이고, 한쪽을 고쳐도
 다른 쪽에 반영하지 않는다.
-
-`GH_APP_*` 값을 발급하고 private key를 workbench로 나르는 절차는 `eks-reference-infra`의
-`scripts/README.md`가 갖는다. 이 스크립트는 그 값들이 이미 있다고 전제한다.
 
 ---
 
@@ -130,7 +129,7 @@ ApplicationSet이, `values.yaml`은 multi-source가 따로 읽는다), `bootstra
 디렉토리까지 전부 읽으므로(`**`), 그 안에서 파일이 늘고 주는 것은 `root-app.yaml`과 무관하다. ⚠️ **렌더가 깨지는 파일이 든 경로**를 `include`에
 넣으면 그 spec이 적용된 뒤부터 자기 갱신이 멈춘다. root App은 자기 spec을 클러스터에 적용된
 옛 spec으로 렌더한 뒤에야 갱신하는데, 그 렌더가 깨지면 갱신에 이르지 못한다. 그 파일을 고치는
-커밋이 풀거나, `argocd-seed.sh --from 5 --to 5`로 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
+커밋이 풀거나, `argocd-seed.sh`의 root Application 단계만 다시 돌려 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
 
 `addons/<addon>/<dir>/`가 helm 차트인지 평문 매니페스트인지는 **per-cluster 값을 주입하는지**로만
 정한다. ArgoCD는 ApplicationSet의 fasttemplate을 Application spec에서만 치환하고 git 경로 안의
