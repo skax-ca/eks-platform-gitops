@@ -337,3 +337,9 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
   아니다). `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`로
   재시작하면 즉시 감지·활성화된다. 신규 클러스터를 처음부터 seed하는 경우(hub·dev 최초 구축)는
   ALBC가 CRD 설치 후 처음 뜨므로 이 문제 자체가 없다.
+
+---
+
+## 라이선스
+
+[MIT](LICENSE).
