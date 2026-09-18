@@ -1,6 +1,6 @@
 # 플랫폼 AppProject — 계층 2(플랫폼 GitOps)의 가드레일
 #
-# seed 3단계다. 4·5단계(cluster Secret·root App)가 이 프로젝트를 참조하므로 반드시 먼저 선다.
+# seed 에서 cluster Secret·root App 보다 먼저 apply 한다. 둘이 이 프로젝트를 참조한다.
 # ⚠️ ArgoCD 의 `default` AppProject 는 세 목록이 전부 '*' 인 완전 개방 상태다. 플랫폼 리소스는
 #    이 전용 프로젝트에만 둔다.
 #

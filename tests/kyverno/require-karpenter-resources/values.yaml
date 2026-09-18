@@ -1,0 +1,11 @@
+# namespaceSelector는 네임스페이스 객체의 라벨을 본다. CLI에는 클러스터가 없으므로 여기서
+# 네임스페이스마다 라벨을 준다. 최상위 키다. spec: 아래 두면 unknown field로 죽는다.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: apps
+    labels:
+      kubernetes.io/metadata.name: apps
+  - name: argocd
+    labels:
+      kubernetes.io/metadata.name: argocd
