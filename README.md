@@ -335,8 +335,16 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
   나중에 추가하면, ALBC 로그에 `Disabling ALBGatewayAPI: missing required CRDs`가 남아있는 채로
   CRD가 생겨도 재감지하지 않는다(GatewayClass가 `Accepted: Unknown`인 채로 조용히 멈춘다 — 에러가
   아니다). `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`로
-  재시작하면 즉시 감지·활성화된다. 신규 클러스터를 처음부터 seed하는 경우(hub·dev 최초 구축)는
-  ALBC가 CRD 설치 후 처음 뜨므로 이 문제 자체가 없다.
+  재시작하면 즉시 감지·활성화된다. 신규 클러스터를 처음부터 seed할 때도 ALBC 파드와 CRD 생성이
+  같은 sync 안에서 병렬이라, 파드가 몇 초 먼저 뜨면 같은 증상이 난다(그때는 `gateway-api-crds`와
+  `gateway`가 `Degraded`·`Progressing`에 머문다). 로그에 `Disabling ALBGatewayAPI`가 있으면 재시작한다.
+- **seed 직후 잠시 남는 비정상 상태**: 아래 둘은 재시작이 아니라 기다림이나 refresh로 푼다.
+  - `kyverno-policies`·`kyverno-custom-policies`가 `Unknown`이고 조건이 `service ...-kyverno-svc not
+    found`인 것은 Kyverno Service가 생기기 전에 캐시된 비교 오류다. Kyverno가 `Synced`가 된 뒤에도
+    남으면 그 Application에 `argocd.argoproj.io/refresh=hard` 어노테이션을 건다.
+  - `kyverno`의 sync가 `mservice.elbv2.k8s.aws` 웹훅의 `x509: certificate signed by unknown
+    authority`로 재시도 중이면, ALBC 차트가 렌더마다 TLS를 새로 만들어 웹훅 CA와 파드 인증서가
+    잠깐 어긋난 것이다. ALBC를 재시작하면 풀린다.
 
 ---
 
