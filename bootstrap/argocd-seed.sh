@@ -32,7 +32,7 @@ GitOps 저장소를 pull 하는 self-managed ArgoCD 를 부트스트랩한다.
 필수 환경변수
   GITOPS_REPO_DIR       체크아웃된 GitOps 저장소 경로 (매니페스트의 출처)
   CLUSTER_DIR           seed 할 클러스터 디렉토리 (GITOPS_REPO_DIR 기준 상대경로)
-                        예: clusters/dev/eks-ref-dev-an2-main-01
+                        예: clusters/hub/eks-demo-hub-an2-main-01
 
 선택 환경변수
   ARGOCD_NAMESPACE      기본 argocd
@@ -42,7 +42,7 @@ GitOps 저장소를 pull 하는 self-managed ArgoCD 를 부트스트랩한다.
 
 예시
   export GITOPS_REPO_DIR=~/eks-platform-gitops
-  export CLUSTER_DIR=clusters/dev/eks-ref-dev-an2-main-01
+  export CLUSTER_DIR=clusters/hub/eks-demo-hub-an2-main-01
   ./argocd-seed.sh --dry-run     # 먼저 이것부터 돌린다
   ./argocd-seed.sh
 USAGE
