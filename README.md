@@ -255,11 +255,15 @@ ApplicationSet이 읽는 라벨이다. 빠지면 그 addon만 조용히 안 뜬�
 | `environment` | baseline 팬아웃 전체 | `hub` · `dev` 등. 존재 자체가 매칭 조건이다 |
 | `tier` | staged addon의 `-prd`/`-nonprd` 선택 · NodePool 차트의 AMI 핀 선택 | `prd` \| `nonprd` |
 | `vpcName` | ALBC의 `vpcTags.Name` | VPC의 Name 태그 |
-| `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름. 26자 hash 접미가 붙어 **재구축마다 바뀐다** |
+| `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름(`iamr-<workload>-<env>-<region>-karpenter-node`). `eks-cluster` 모듈이 접두 모드를 끄고 고정 이름으로 만들어 재구축해도 같다 |
 | `addon-<name>: enabled` | catalog addon 구독 | `addon-keda` · `addon-cluster-autoscaler` |
+| `decommission` | `gateway` · `karpenter-nodepool` (`DoesNotExist`) | 등록 해제 1단계에서만 붙인다. 존재하면 두 ApplicationSet이 그 클러스터를 놓는다. 값은 읽지 않는다 |
 
-⚠️ **teardown은 매칭 라벨을 먼저 뗀 뒤 Secret을 지운다.** git 이력의 마지막 cluster-secret을 그대로
-되살리면 라벨이 빠진 껍데기이고, 그 상태로는 Application이 하나도 생기지 않는다.
+⚠️ **teardown은 `decommission`을 붙여 CR을 먼저 prune하고, 그다음 매칭 라벨을 뗀 뒤 Secret을
+지운다.** 매칭 라벨을 한 번에 떼면 ALBC·Karpenter가 자기 CR보다 먼저 사라져 finalizer가 멈추고 SG가
+고아로 남는다. 설계 근거는 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/aws/`가 갖는다.
+git 이력의 마지막 cluster-secret을 그대로 되살리면 라벨이 빠진 껍데기이고, 그 상태로는 Application이
+하나도 생기지 않는다.
 
 ### addon 네임스페이스 규칙
 

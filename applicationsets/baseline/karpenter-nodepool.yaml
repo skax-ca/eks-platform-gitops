@@ -10,8 +10,11 @@
 #    nonprd 줄과 prd 줄이 한 파일에 나란히 있어 승격 구간이 git 이력에 남는다(두 줄 모두 버전을 적는다).
 # Terraform 전제: 노드 IAM role. 그 이름만 클러스터명에서 파생되지 않아 cluster Secret 의
 #    karpenterNodeRole 라벨로 받는다.
+# ⚠️ 이 CR 의 finalizer 는 Karpenter 컨트롤러(karpenter.yaml, 다른 Application)가 처리한다. 등록
+#    해제 때 컨트롤러보다 먼저 prune 되도록 selector 가 decommission 라벨이 붙은 클러스터를 놓는다.
 #
-# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
+# 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md ·
+#    docs/architectures/gitops-hub-spoke/aws/
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -27,6 +30,8 @@ spec:
           matchExpressions:
             - key: environment
               operator: Exists
+            - key: decommission
+              operator: DoesNotExist
   template:
     metadata:
       name: '{{name}}-karpenter-nodepool'
