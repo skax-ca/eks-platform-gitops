@@ -27,7 +27,7 @@ spec:
       #    bootstrap/argocd-values.yaml 이 범위 밖이라 exclude 나 skip-rendering 마커가 필요 없다.
       #      · projects/*.yaml                 AppProject
       #      · clusters/**/cluster-secret.yaml `**` 라 env 깊이와 무관하다
-      #      · applicationsets/**/*.yaml       baseline·catalog 전부. 하위 디렉토리가 늘어도 그대로다
+      #      · applicationsets/**/*.yaml       부모를 만드는 ApplicationSet(platform.yaml)
       #      · bootstrap/root-app.yaml         이 파일 자신(자기소멸)
       #      · bootstrap/argocd-app.yaml       ArgoCD 자기 관리 Application
       #    매니페스트 디렉토리를 새로 만들면 한 줄 더한다.

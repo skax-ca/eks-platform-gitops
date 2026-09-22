@@ -1,0 +1,43 @@
+{{- if eq .Values.addons.keda "enabled" }}
+# KEDA — wave 1(컨트롤러), opt-in. 이벤트 기반 오토스케일링.
+#
+# cluster Secret 에 `addon-keda: enabled` 가 있을 때만 렌더한다. 라벨을 떼면 부모의 prune 이 이
+#    Application 을 지운다. 그것이 구독 해지다.
+# 네임스페이스는 전용 ns 신설. 이 저장소의 기본 규칙이다.
+# Terraform 전제: 없다. AWS 스케일러(SQS·CloudWatch)를 쓰지 않아 IAM 이 0건이고, 이 addon 은
+#    계층 2 안에서 닫힌다. ⚠️ AWS 스케일러가 필요해지면 Pod Identity association 을 연다.
+# ⚠️ 이미지가 ghcr.io 다. 다른 addon 대부분은 public.ecr.aws 라 노드 egress 경로가 다르다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "platform.name" . }}-keda
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://kedacore.github.io/charts
+      chart: keda
+      targetRevision: {{ .Values.versions.keda }}
+      helm:
+        valueFiles:
+          - $values/addons/keda/values.yaml
+    - repoURL: {{ .Values.gitops.repoURL }}
+      targetRevision: {{ .Values.gitops.targetRevision }}
+      ref: values
+  destination:
+    server: {{ include "platform.server" . }}
+    namespace: keda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # ⚠️ 자동 생성된 Namespace 도 AppProject 의 clusterResourceWhitelist 검사를 받는다.
+      - CreateNamespace=true
+      # CRD 6개 + APIService 가 커서 client-side apply 의 애노테이션 크기 한도에 걸린다.
+      - ServerSideApply=true
+{{- end }}

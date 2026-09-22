@@ -1,0 +1,41 @@
+# 공유 Gateway — wave 2(CR). GatewayClass·LoadBalancerConfiguration·Gateway 를 만든다.
+#
+# wave 2 인 이유: CRD(wave 0)와 finalizer 를 처리하는 ALBC(wave 1)에 기댄다. 해제 때 ALBC 보다 먼저
+#    지워지므로 ALBC 가 ALB 와 SG 를 정리한 뒤 finalizer 를 푼다.
+# ⚠️ 이 리소스가 적용되는 순간 실제 ALB 가 생성된다(과금 시작). HTTPRoute 유무와 무관하다. Healthy
+#    까지 ALB 프로비저닝 시간이 걸리므로 뒤에 기다리는 wave 가 없는 마지막 wave 에 둔다.
+# ⛔ HTTPRoute·백엔드 Service 는 여기 없다. 계층 3(앱 GitOps)은 이 저장소 범위 밖이다. 앱팀이
+#    이 Gateway 를 parentRefs 로 참조하는 HTTPRoute 를 자기 저장소에 만든다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "platform.name" . }}-gateway
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: platform
+  source:
+    # 이 저장소의 로컬 helm 차트다. per-cluster 값을 주입해야 해서 평문이 아니다.
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    path: addons/gateway/shared-gateway
+    helm:
+      parameters:
+        - name: environment
+          value: {{ required "cluster.environment 가 비었다(cluster Secret environment 라벨)" .Values.cluster.environment }}
+  destination:
+    server: {{ include "platform.server" . }}
+    namespace: gateway-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # wave 가 CRD 를 먼저 세우지만, 대기가 서지 않는 경우(Application health Lua 누락)에도 첫 sync 가
+      # dry-run 에서 멈추지 않게 한다.
+      - SkipDryRunOnMissingResource=true
+      - CreateNamespace=true
+      - ServerSideApply=true

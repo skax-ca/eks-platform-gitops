@@ -1,5 +1,5 @@
-# ⚠️ 기본값이 없다. ApplicationSet 이 cluster generator 에서 주입한다
-#    (applicationsets/baseline/gateway.yaml). 비어 있으면 템플릿이 required 로 실패한다 — 조용히
+# ⚠️ 기본값이 없다. 부모 차트가 cluster Secret 값을 주입한다
+#    (addons/platform/templates/gateway.yaml). 비어 있으면 템플릿이 required 로 실패한다 — 조용히
 #    틀린 값이 들어가는 것보다 낫다. clusterName은 여기서 받지 않는다 — 이 3개 매니페스트
 #    (GatewayClass·LoadBalancerConfiguration·Gateway) 중 실제로 참조하는 곳이 없다.
 environment: ""

@@ -1,5 +1,5 @@
 # 이 저장소가 직접 소유하는 ValidatingPolicy. 업스트림 PSS 정책과 별도 Application 인 이유는
-# applicationsets/baseline/kyverno-custom-policies.yaml 헤더가 갖는다.
+# addons/platform/templates/kyverno-custom-policies.yaml 헤더가 갖는다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md
 apiVersion: policies.kyverno.io/v1beta1

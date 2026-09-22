@@ -1,0 +1,54 @@
+{{- if eq .Values.addons.clusterAutoscaler "enabled" }}
+# Cluster Autoscaler — wave 1(컨트롤러), opt-in. managed_node_groups 를 스케일한다.
+#
+# cluster Secret 에 `addon-cluster-autoscaler: enabled` 가 있을 때만 렌더한다.
+# Karpenter(baseline, 전 클러스터)와 달리 선택이다. "app 워크로드는 Karpenter, 필수 addon·OSS 는
+#    managed_node_groups + CA" 를 쓰는 클러스터만 라벨로 구독한다.
+# ⚠️ taint 분리 없이 켜면 CA 가 노드그룹을 auto-discover 해 Karpenter 와 같은 pending pod 를 두고
+#    경쟁한다. addons/cluster-autoscaler/values.yaml 의 nodeSelector·tolerations 가 그 경쟁을 차단한다.
+# 네임스페이스가 kube-system 인 근거는 README 「addon 네임스페이스 규칙」이 갖는다. ⚠️ 그 표에서
+#    유일하게 약한 예외다. 바꾸려면 Terraform 의 Pod Identity association 과 함께 고쳐야 한다.
+# Terraform 전제: Pod Identity role·association `kube-system/cluster-autoscaler`, ASG 의
+#    scale-from-zero `node-template/*` 태그. 없으면 권한 없이 떠서 조용히 아무것도 못 한다.
+# taint 병행 전략: skax-ca/eks-reference-infra의 docs/runbooks.md
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "platform.name" . }}-cluster-autoscaler
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://kubernetes.github.io/autoscaler
+      chart: cluster-autoscaler
+      targetRevision: {{ .Values.versions.clusterAutoscaler }}
+      helm:
+        releaseName: cluster-autoscaler
+        parameters:
+          # autoDiscovery.tags 기본값이 AWS 가 managed node group 에 자동으로 붙이는 두 태그와
+          # 같아서 clusterName 하나만 주면 된다.
+          - name: autoDiscovery.clusterName
+            value: {{ include "platform.name" . }}
+          - name: awsRegion
+            value: ap-northeast-2
+          - name: cloudProvider
+            value: aws
+        valueFiles:
+          - $values/addons/cluster-autoscaler/values.yaml
+    - repoURL: {{ .Values.gitops.repoURL }}
+      targetRevision: {{ .Values.gitops.targetRevision }}
+      ref: values
+  destination:
+    server: {{ include "platform.server" . }}
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+{{- end }}

@@ -1,0 +1,40 @@
+# Gateway API 표준 CRD — wave 0. CRD 만 설치한다.
+#
+# 🔑 wave 0 인 이유: ALBC(wave 1)는 파드가 시작할 때 discovery 로 이 CRD 를 한 번만 확인하고, 없으면
+#    ALBGatewayAPI 를 끈 채 계속 돈다(로그 `Disabling ALBGatewayAPI: missing required CRDs`). 에러가
+#    아니라서 GatewayClass 가 Accepted: Unknown 인 채로 멈춘다. 부모가 이 Application 이 Healthy
+#    (CRD Established)가 된 뒤에 ALBC 를 만들어야 감지가 CRD 를 본다.
+# 🔑 컨트롤러는 aws-load-balancer-controller.yaml 이 담당한다. 이 CRD 는 Gateway API 타입을 apiserver 에
+#    등록할 뿐이고, ALB 를 만드는 것은 gateway.yaml 이다.
+# ⛔ AWS 전용 Gateway CRD 를 위한 별도 addon 을 만들지 않는다. ALBC 차트의 `crds/` 폴더가 이미
+#    설치하므로, 또 만들면 같은 CRD 를 두 Application 이 소유하려는 충돌이 난다.
+# 소스가 helm repo 가 아니라 git repo 인 이유: upstream 이 이 CRD 세트를 차트로 배포하지 않는다.
+# ⚠️ 이 Application 이 지워지면 CRD 실물과 그 CRD 를 쓰던 Gateway·HTTPRoute 가 cascade 로 사라진다.
+#    이름을 바꾸는 것도 같은 경로다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "platform.name" . }}-gateway-api-crds
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/kubernetes-sigs/gateway-api.git
+    targetRevision: {{ include "platform.staged" (list . "gatewayApiCrds") }}
+    # kustomization.yaml 이 없는 순수 YAML 디렉토리라 ArgoCD 가 Directory 타입으로 렌더한다.
+    path: config/crd/standard
+  destination:
+    server: {{ include "platform.server" . }}
+    # CRD 는 cluster-scoped 라 이 ns 는 형식상 값이다.
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # CRD 크기가 client-side apply 의 애노테이션 한도를 넘는다.
+      - ServerSideApply=true

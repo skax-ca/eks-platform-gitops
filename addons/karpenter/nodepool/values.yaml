@@ -1,5 +1,5 @@
-# ⚠️ 아래 셋은 **기본값이 없다.** ApplicationSet 이 cluster generator 에서 주입한다
-#    (applicationsets/baseline/karpenter.yaml ②). 비어 있으면 템플릿이 required 로 실패한다 —
+# ⚠️ 아래 셋은 **기본값이 없다.** 부모 차트가 cluster Secret 값을 주입한다
+#    (addons/platform/templates/karpenter-nodepool.yaml). 비어 있으면 템플릿이 required 로 실패한다 —
 #    조용히 틀린 값이 들어가는 것보다 낫다.
 clusterName: ""
 nodeRole: ""
@@ -41,7 +41,7 @@ disruption:
 # EKS Best Practices Guide 도 검증한 AMI 로 핀하라고 권고한다. 그래서 두 티어 모두 버전을 적고,
 # 값은 티어로 갈린다 — nonprd 줄에 후보 버전을 먼저 올려 노드가 정상으로 뜨는 것을 보고, 같은 값을
 # prd 줄에 올린다. 두 줄이 한 파일에 있어 그 사이가 git 이력에 승격 구간으로 남는다. 차트를 티어별로
-# 쪼개지 않는 이유는 applicationsets/baseline/karpenter-nodepool.yaml 헤더에 있다.
+# 쪼개지 않는 이유는 addons/platform/templates/karpenter-nodepool.yaml 헤더에 있다.
 #
 # prd 줄은 그 클러스터에서 **실제로 뜬 노드**에서 읽은 값만 받는다(`kubectl get nodeclaim -o wide`).
 # 조회만 해서 넣은 최신 버전은 아무도 그 위에서 워크로드를 돌려보지 않았다는 점에서 `latest` 와
