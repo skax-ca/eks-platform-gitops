@@ -7,7 +7,7 @@
 #    차트가 두 CRD 버전 모두에서 유효해야 한다. 새 버전에서 생긴 필드가 필요하면 그 승격을 끝내고
 #    커밋한다.
 # 티어마다 갈려야 하는 값은 tier 라벨을 차트에 넘겨 values 안에서 고른다. AMI 핀이 그 경로를 쓴다 —
-#    nonprd 줄과 prd 줄이 한 파일에 나란히 있어 승격 구간이 git 이력에 남는다.
+#    nonprd 줄과 prd 줄이 한 파일에 나란히 있어 승격 구간이 git 이력에 남는다(두 줄 모두 버전을 적는다).
 # Terraform 전제: 노드 IAM role. 그 이름만 클러스터명에서 파생되지 않아 cluster Secret 의
 #    karpenterNodeRole 라벨로 받는다.
 #
