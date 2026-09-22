@@ -38,18 +38,18 @@ disruption:
 # `@latest` 는 Karpenter 가 최신을 추적한다는 뜻이라, 새 AMI 가 릴리스되면 낡은 노드를 전부 교체한다.
 #
 # Karpenter 문서는 `latest` 를 운영 환경에 권하지 않고 새 AMI 를 비운영에서 먼저 시험하라고 적는다.
-# EKS Best Practices Guide 도 검증한 AMI 로 핀하라고 권고한다. 그래서 이 값은 티어로 갈린다 —
-# nonprd 를 먼저 올려 노드가 정상으로 뜨는 것을 보고, 같은 값을 prd 에 올린다. 두 줄이 한 파일에
-# 있어 그 사이가 git 이력에 승격 구간으로 남는다. 차트를 티어별로 쪼개지 않는 이유는
-# applicationsets/baseline/karpenter-nodepool.yaml 헤더에 있다.
+# EKS Best Practices Guide 도 검증한 AMI 로 핀하라고 권고한다. 그래서 두 티어 모두 버전을 적고,
+# 값은 티어로 갈린다 — nonprd 줄에 후보 버전을 먼저 올려 노드가 정상으로 뜨는 것을 보고, 같은 값을
+# prd 줄에 올린다. 두 줄이 한 파일에 있어 그 사이가 git 이력에 승격 구간으로 남는다. 차트를 티어별로
+# 쪼개지 않는 이유는 applicationsets/baseline/karpenter-nodepool.yaml 헤더에 있다.
 #
-# 핀 값은 그 클러스터에서 **실제로 뜬 노드**에서 읽는다(`kubectl get nodeclaim -o wide`). 조회만 해서
-# 넣은 최신 버전은 아무도 그 위에서 워크로드를 돌려보지 않았다는 점에서 `latest` 와 위험이 같고,
-# 자동 추적의 이점만 잃는다.
+# prd 줄은 그 클러스터에서 **실제로 뜬 노드**에서 읽은 값만 받는다(`kubectl get nodeclaim -o wide`).
+# 조회만 해서 넣은 최신 버전은 아무도 그 위에서 워크로드를 돌려보지 않았다는 점에서 `latest` 와
+# 위험이 같고, 자동 추적의 이점만 잃는다. nonprd 줄은 그 검증을 받을 후보를 넣는 자리다.
 #
 # ⚠️ 값을 바꾸면 그 티어의 노드가 교체된다. Karpenter 가 낡은 노드를 걷어내고 새로 띄운다.
-# 🔑 prd 는 hub 에서 실제로 뜬 노드의 AMI 버전에 핀한다. nonprd 는 `latest` 로 두어 다음 AMI 를
-#    먼저 받는 자리다. 새 AMI 를 nonprd 에서 확인한 뒤 같은 값을 prd 에 올린다.
+# ⚠️ 새 AMI 는 자동으로 들어오지 않는다. 릴리스를 확인해 nonprd 줄을 올리는 사람이 승격을 시작한다.
+# 🔑 두 줄이 같으면 승격이 끝난 상태이고, 다르면 nonprd 가 후보를 시험하는 중이다.
 amiAliasByTier:
   prd: al2023@v20260917
-  nonprd: al2023@latest
+  nonprd: al2023@v20260917
