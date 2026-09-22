@@ -30,6 +30,28 @@ dex:
 notifications:
   enabled: false
 
+configs:
+  cm:
+    # 🔑 부모 Application(<cluster>-platform)의 sync-wave 가 addon 설치 순서가 되게 한다. ArgoCD 는
+    #    argoproj.io/Application 의 health 평가를 1.8 에서 뺐고 지금도 내장 체크가 없다. 이 Lua 가
+    #    없으면 부모가 addon Application 을 만들자마자 다음 wave 로 넘어가 wave 가 생성 순서만 정한다.
+    #    Lua 는 ArgoCD 1.7→1.8 업그레이드 문서의 것 그대로다.
+    # ⚠️ 전역 설정이라 root-app 에도 걸린다. root-app 의 health 가 이 파일의 자기 관리 Application 과
+    #    부모들의 health 를 반영한다.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil then
+        if obj.status.health ~= nil then
+          hs.status = obj.status.health.status
+          if obj.status.health.message ~= nil then
+            hs.message = obj.status.health.message
+          end
+        end
+      end
+      return hs
+
 # ── 기본값을 유지하는 것 — 판단의 기록 (여기에 값을 적지 않는다) ──
 # server.service.type: ClusterIP
 #   노출을 만들지 않는다. 사람은 workbench 경유 port-forward 로 닿는다.

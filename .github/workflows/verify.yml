@@ -6,10 +6,11 @@
 # argocd app diff가 맡는다.
 #   1. 로컬 훅(.githooks/pre-commit)과 같은 것: 주석 규칙 검사기, bash -n·shellcheck
 #   2. YAML 전체 파싱. 차트 templates/는 Go 템플릿이라 뺀다(렌더가 본다)
-#   3. 로컬 차트 helm lint·template. required 값은 ApplicationSet이 cluster Secret 라벨에서
-#      주입하는 것이라 여기서는 대표값을 --set으로 준다(seed의 --set 금지와 무관하다. 렌더일 뿐이다)
+#   3. 로컬 차트 helm lint·template. required 값은 부모 차트(addons/platform)가 cluster Secret
+#      라벨에서 주입하는 것이라 여기서는 대표값을 --set으로 준다(seed의 --set 금지와 무관하다. 렌더일
+#      뿐이다). 부모 차트는 두 티어와 opt-in 구독 유무를 모두 렌더하고, 없는 tier가 실패하는지 본다
 #   4. kyverno test. 커스텀 정책의 통과·거부·제외를 tests/kyverno/의 픽스처로 판정한다.
-#      CLI 버전은 kyverno 차트의 appVersion과 같아야 한다(applicationsets/baseline/kyverno.yaml)
+#      CLI 버전은 kyverno 차트의 appVersion과 같아야 한다(addons/platform/values.yaml의 versions.kyverno)
 # ⚠️ 훅과 명령이 같아야 한다. 여기서만 막히면 둘 중 하나가 틀린 것이다.
 
 name: verify
@@ -105,6 +106,18 @@ jobs:
           done
           helm lint addons/gateway/shared-gateway --set environment=dev --quiet
           helm template t addons/gateway/shared-gateway --set environment=dev >/dev/null
+          base=cluster.name=eks-x,cluster.server=https://x,cluster.environment=dev,cluster.vpcName=vpc-x,cluster.karpenterNodeRole=role-x
+          for tier in prd nonprd; do
+            for sub in "" enabled; do
+              set_="$base,cluster.tier=$tier,addons.keda=$sub,addons.clusterAutoscaler=$sub"
+              helm lint addons/platform --set "$set_" --quiet
+              helm template t addons/platform --set "$set_" >/dev/null
+            done
+          done
+          # tier 오타가 조용히 빠지지 않고 렌더 실패가 되는지 본다.
+          if helm template t addons/platform --set "$base,cluster.tier=prod" >/dev/null 2>&1; then
+            echo "tier=prod 가 렌더를 통과했다. required 가 빠졌다"; exit 1
+          fi
 
       - name: kyverno test
         run: |

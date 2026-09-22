@@ -5,7 +5,7 @@ description: |
   HTTPRoute·백엔드 라우팅 규칙은 계층 3이라 이 저장소 범위 밖이다.
 
   ⚠️ 평문이 아니라 helm 차트인 이유는 per-cluster 값을 CR 에 주입할 다른 수단이 없어서다.
-     ApplicationSet 의 fasttemplate 은 Application spec 에만 적용되고 git 경로 안의 파일에는
-     적용되지 않는다.
+     부모 차트는 Application spec 에 값을 적을 수 있지만, 평문 디렉토리 source 는 파일 안의 값을
+     치환하지 않는다.
 type: application
 version: 0.1.0

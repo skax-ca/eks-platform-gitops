@@ -1,0 +1,52 @@
+# Karpenter NodePool/EC2NodeClass — wave 2(CR). 계층 2가 소유하는 인프라 CR 이다.
+#
+# wave 2 인 이유: Karpenter 차트(wave 1)가 동봉한 CRD 와 그 컨트롤러의 finalizer 처리에 기댄다.
+# ⚠️ 해제 때 NodePool 이 지워지면 Karpenter 노드의 파드가 쫓겨난다. wave 1 의 컨트롤러는 시스템
+#    노드그룹 taint 를 넘는 toleration 이 있어 시스템 노드로 옮겨 계속 돈다. 이 toleration 없이
+#    Karpenter 노드에만 뜨는 addon 을 새로 넣으면 그 addon 은 이것보다 뒤 wave 로 간다.
+# ⛔ 티어로 쪼개지 않는다(uniform). targetRevision 이 이 저장소 자신이라 두 벌로 나눠도 둘 다 main 을
+#    가리켜 승격이 기록되지 않는다. ⚠️ 그래서 컨트롤러 승격이 진행 중이면 이 차트가 두 CRD 버전 모두에서
+#    유효해야 한다.
+# 티어마다 갈려야 하는 값은 tier 를 차트에 넘겨 values 안에서 고른다. AMI 핀이 그 경로를 쓴다.
+#    nonprd 줄과 prd 줄이 한 파일에 나란히 있어 승격 구간이 git 이력에 남는다.
+# Terraform 전제: 노드 IAM role. 그 이름만 클러스터명에서 파생되지 않아 cluster Secret 의
+#    karpenterNodeRole 라벨로 받는다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "platform.name" . }}-karpenter-nodepool
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: platform
+  source:
+    # 이 저장소의 로컬 helm 차트다. per-cluster 값을 CR 에 주입해야 해서 평문이 아니다.
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    path: addons/karpenter/nodepool
+    helm:
+      parameters:
+        - name: clusterName
+          value: {{ include "platform.name" . }}
+        # 🔑 클러스터명에서 파생할 수 없는 값이다(upstream 기본값은 role 이름에 무작위 접미가 붙는다).
+        - name: nodeRole
+          value: {{ required "cluster.karpenterNodeRole 이 비었다(cluster Secret karpenterNodeRole 라벨)" .Values.cluster.karpenterNodeRole }}
+        # 차트가 AMI 핀을 이 값으로 고른다.
+        - name: tier
+          value: {{ .Values.cluster.tier }}
+  destination:
+    server: {{ include "platform.server" . }}
+    # CR 은 cluster-scoped 라 이 ns 는 형식상 값이다.
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # wave 가 CRD 를 먼저 세우지만, 대기가 서지 않는 경우(Application health Lua 누락)에도 첫 sync 가
+      # dry-run 에서 멈추지 않게 한다.
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true

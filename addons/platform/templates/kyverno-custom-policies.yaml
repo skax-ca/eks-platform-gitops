@@ -1,0 +1,39 @@
+# Kyverno 커스텀 정책 — wave 2(정책). 이 저장소가 직접 소유하는 ValidatingPolicy 다.
+#
+# wave 2 인 이유: 엔진(wave 1)이 만드는 CRD 에 기댄다.
+# 업스트림 정책(kyverno-policies.yaml)과 Application 을 나눈다. 그쪽은 source 가 차트 하나로 고정돼
+#    있어 우리가 만든 정책을 끼워 넣을 자리가 없다.
+# uniform 인 이유: targetRevision 이 main 이라 승격할 버전이 없다. ⚠️ 그래서 양 티어가 같은 정책을
+#    본다. 엔진 승격이 진행 중이면 이 정책이 두 엔진 버전 모두에서 유효해야 한다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "platform.name" . }}-kyverno-custom-policies
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    # 업스트림 정책과 같은 원인으로 이것이 없으면 OutOfSync 로 고착한다. 우리가 선언하지 않은
+    #    spec.admission·spec.emitWarning 을 apiserver 가 CRD 스키마의 default 로 채운다.
+    #    ⚠️ 빼면 selfHeal 이 매번 "고치고" 다시 OutOfSync 로 돌아오는 무한 루프가 된다.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+spec:
+  project: platform
+  source:
+    # 평문 매니페스트 디렉토리다. root-app 의 include 범위 밖이라 root App 이 정책 파일을 읽을 일이 없다.
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    path: addons/kyverno/custom-policies
+  destination:
+    server: {{ include "platform.server" . }}
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # wave 가 CRD 를 먼저 세우지만, 대기가 서지 않는 경우(Application health Lua 누락)에도 첫 sync 가
+      # dry-run 에서 멈추지 않게 한다.
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true

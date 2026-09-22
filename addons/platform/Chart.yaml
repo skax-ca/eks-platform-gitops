@@ -1,0 +1,12 @@
+apiVersion: v2
+name: platform
+description: |
+  클러스터 하나의 플랫폼 addon Application 전부 — 부모 Application <cluster>-platform 이 렌더한다.
+
+  🔑 addon Application 을 ApplicationSet 이 직접 만들지 않고 이 차트가 만드는 이유는 순서다. 부모가
+     addon Application 을 자기 리소스로 sync 해야 sync-wave 가 설치 순서(앞 wave 가 Healthy 가 된 뒤
+     다음 wave)와 해제 순서(wave 역순, 삭제 완료 대기)가 된다.
+  ⚠️ 그 대기는 argoproj.io/Application health 가 있어야 성립한다. bootstrap/argocd-values.yaml 이
+     그 Lua 를 넣는다.
+type: application
+version: 0.1.0

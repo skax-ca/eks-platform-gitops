@@ -18,8 +18,8 @@
 - [부트스트랩 — 자기소멸(self-superseding) 원칙](#부트스트랩--자기소멸self-superseding-원칙)
 - [`bootstrap/argocd-seed.sh` — 이 저장소가 소유한다](#bootstrapargocd-seedsh--이-저장소가-소유한다)
 - [root App이 읽는 범위 — `include` allow-list](#root-app이-읽는-범위--include-allow-list)
-- [ApplicationSet 공통 규약](#applicationset-공통-규약)
-  - [staged 전파 — `-prd` · `-nonprd` 두 블록](#staged-전파---prd---nonprd-두-블록)
+- [부모 Application — 클러스터마다 하나](#부모-application--클러스터마다-하나)
+  - [버전 표 — `addons/platform/values.yaml`](#버전-표--addonsplatformvaluesyaml)
 - [helm values — `addons/<addon>/values.yaml`](#helm-values--addonsaddonvaluesyaml)
 - [게이트 — 로컬 훅과 CI](#게이트--로컬-훅과-ci)
 - [알아야 할 규약](#알아야-할-규약)
@@ -65,9 +65,9 @@ bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application. 위 values를 $
 bootstrap/argocd-seed.sh     # seed 실행 스크립트. 이 저장소가 소유한다(아래 절)
 clusters/<env>/<cluster>/    # cluster Secret. 새 클러스터 = 디렉토리 1개(O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
-applicationsets/baseline/    # 전 클러스터 팬아웃 ApplicationSet(environment 라벨). root App이 읽는다
-applicationsets/catalog/     # opt-in 카탈로그 ApplicationSet — 구독한 클러스터만(addon-<name> 라벨)
-addons/<addon>/              # 위 ApplicationSet의 source가 읽는 내용물. root App은 읽지 않는다
+applicationsets/platform.yaml # 클러스터마다 부모 Application을 만드는 ApplicationSet. root App이 읽는다
+addons/platform/             # 부모 차트. 그 클러스터의 addon Application 전부와 wave·버전 표. root App은 읽지 않는다
+addons/<addon>/              # addon Application의 source가 읽는 내용물. root App은 읽지 않는다
 addons/<addon>/values.yaml   #   업스트림 차트 helm values. 티어 쌍이 같은 파일을 읽는다(아래 "helm values" 절)
 addons/gateway/shared-gateway/  #   GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
 addons/karpenter/nodepool/   #   NodePool/EC2NodeClass 로컬 helm 차트(per-cluster 값 주입)
@@ -78,8 +78,8 @@ scripts/                     # 주석 규칙 검사기(.py다 — 아래 "게이
 tests/kyverno/               # 커스텀 정책 픽스처. Application source 경로 밖이라 클러스터에 가지 않는다
 ```
 
-**확장 규칙(O(1))**: 새 클러스터는 `clusters/<env>/<cluster>/` 1개만 추가하면 cluster generator가
-라벨로 자동 팬아웃한다. 새 앱팀은 `projects/<team>.yaml` 가드레일 1개만 추가한다.
+**확장 규칙(O(1))**: 새 클러스터는 `clusters/<env>/<cluster>/` 1개만 추가하면 그 클러스터의 부모가
+생기고, 부모가 라벨대로 addon을 렌더한다. 새 앱팀은 `projects/<team>.yaml` 가드레일 1개만 추가한다.
 
 ---
 
@@ -120,8 +120,8 @@ ArgoCD의 읽기에도 자격증명이 없다. 스크립트는 preflight에서 `
 
 `bootstrap/root-app.yaml`은 `directory.include`에 적힌 경로만 매니페스트로 읽는다. 지금은
 `projects/`·`clusters/**/cluster-secret.yaml`·`applicationsets/**`·`bootstrap/`의 두 Application
-파일이다. **그 밖은 무엇이든 무시한다** — `addons/` 전체(로컬 차트·CR 매니페스트는 전담
-ApplicationSet이, `values.yaml`은 multi-source가 따로 읽는다), `bootstrap/argocd-values.yaml`, 도구
+파일이다. **그 밖은 무엇이든 무시한다** — `addons/` 전체(부모 차트는 부모가, 로컬 차트·CR 매니페스트는
+addon Application이, `values.yaml`은 multi-source가 따로 읽는다), `bootstrap/argocd-values.yaml`, 도구
 파일 전부.
 
 이 저장소는 `exclude`와 `+argocd:skip-file-rendering` 마커를 쓰지 않는다. 기각 근거는
@@ -134,51 +134,71 @@ ApplicationSet이, `values.yaml`은 multi-source가 따로 읽는다), `bootstra
 커밋이 풀거나, `argocd-seed.sh`의 root Application 단계만 다시 돌려 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
 
 `addons/<addon>/<dir>/`가 helm 차트인지 평문 매니페스트인지는 **per-cluster 값을 주입하는지**로만
-정한다. ArgoCD는 ApplicationSet의 fasttemplate을 Application spec에서만 치환하고 git 경로 안의
-파일에서는 치환하지 않으므로, cluster generator의 값을 CR에 넣으려면 helm이 필요하다(`shared-gateway`·
+정한다. 부모 차트는 addon Application spec에 값을 적을 수 있지만 평문 디렉토리 source는 파일 안의
+값을 치환하지 않으므로, 클러스터별 값을 CR에 넣으려면 helm이 필요하다(`shared-gateway`·
 `karpenter/nodepool`). 주입할 값이 없으면 평문이다(`kyverno/custom-policies`).
 
-## ApplicationSet 공통 규약
+## 부모 Application — 클러스터마다 하나
 
-매니페스트마다 반복하지 않고 여기 한 번 적는다. 개별 파일 주석은 그 파일에만 참인 것만 갖는다.
+`applicationsets/platform.yaml`이 cluster Secret마다 부모 `<cluster>-platform`을 만들고, 부모가
+`addons/platform/` 차트로 그 클러스터의 addon Application을 렌더한다. 부모를 두는 이유는 순서다.
+부모가 addon Application을 자기 리소스로 sync해야 sync-wave가 설치 순서(앞 wave가 Healthy가 된 뒤
+다음 wave)와 해제 순서(wave 역순, 삭제 완료 대기)가 된다. 설계 근거는 `iac-module-library`의
+`docs/architectures/gitops-hub-spoke/ordering.md`가 갖는다.
+
+| wave | addon | 기대는 것 |
+|:---:|---|---|
+| 0 | `gateway-api-crds` | 없다 |
+| 1 | `aws-lbc` · `karpenter` · `kyverno` · `keda` · `cluster-autoscaler` | CRD. ALBC는 파드가 시작할 때 Gateway API CRD를 한 번만 감지한다 |
+| 2 | `gateway` · `karpenter-nodepool` · `kyverno-policies` · `kyverno-custom-policies` | 자기 CRD와 finalizer를 처리하는 컨트롤러 |
+
+매니페스트마다 반복하지 않고 여기 한 번 적는다. 개별 템플릿 주석은 그 파일에만 참인 것만 갖는다.
 
 | 항목 | 규약 |
 |---|---|
-| 팬아웃 | cluster generator가 라벨이 맞는 cluster Secret마다 Application을 1개 만든다. ArgoCD 내장 `in-cluster`에는 Secret도 라벨도 없어 걸리지 않는다 — cluster Secret을 명시적으로 만드는 이유다 |
-| `finalizers` | `resources-finalizer.argocd.argoproj.io`를 template에 둔다. 없으면 Application CR을 지워도 그것이 만든 리소스가 클러스터에 orphan으로 남는다 |
-| `releaseName` | Application 이름과 분리한다. 없으면 `{{name}}-<addon>`이 리소스 이름에 전파돼 63자 제한에 걸린다 |
+| wave | addon Application의 `argocd.argoproj.io/sync-wave`. 기대는 addon보다 크게 둔다. 대기는 `bootstrap/argocd-values.yaml`의 Application health Lua가 있어야 선다. 없으면 wave가 생성 순서만 정한다 |
+| `finalizers` | 부모와 addon Application 모두 `resources-finalizer.argocd.argoproj.io`를 둔다. 부모의 것이 해제 때 addon을 wave 역순으로 지우고, addon의 것이 클러스터 실물을 지운다 |
+| `releaseName` | Application 이름과 분리한다. 없으면 `<cluster>-<addon>`이 리소스 이름에 전파돼 63자 제한에 걸린다 |
 | `ref: values` source | `ref`만 있고 `path`/`chart`가 없어 렌더 대상이 아니다. `$values`가 이 저장소 루트를 가리키게 하는 것이 전부다 |
+| 부모 `prune: true` | opt-in 해지(라벨 제거)가 부모의 prune으로 이루어진다. ⚠️ 그래서 `addons/platform/templates/`에서 파일을 지우면 등록된 전 클러스터에서 그 addon이 지워진다 |
 
-⚠️ **돌고 있는 클러스터가 있을 때 ApplicationSet 이름을 바꾸지 않는다.** 이름이 바뀌면 삭제로
-처리되고, 그것이 만든 Application이 `ownerReference`를 따라 지워지면서 finalizer가 **실물까지
-prune한다.** 정리할 수 있는 시점은 전면 철거 이후 seed 이전뿐이다.
+⚠️ **돌고 있는 클러스터가 있을 때 ApplicationSet `platform`의 이름·selector나 addon 템플릿의
+`metadata.name`을 바꾸지 않는다.** 이름이 바뀌면 삭제로 처리되고, finalizer가 **실물까지 prune한다.**
+정리할 수 있는 시점은 전면 철거 이후 seed 이전뿐이다.
 
-### staged 전파 — `-prd` · `-nonprd` 두 블록
+⚠️ **부모가 앞 wave를 기다리며 멈췄을 때**: 앞 wave의 addon이 Healthy가 되지 못하면 부모의 sync
+operation이 끝나지 않고, 그동안 버전 표를 고친 커밋이 addon Application에 반영되지 않는다. ArgoCD의
+sync 타임아웃 기본값이 무제한이라 스스로 풀리지 않는다. `argocd app terminate-op <cluster>-platform`으로
+끊으면 다음 auto-sync가 새 커밋으로 돈다. `addons/<addon>/values.yaml`만 고친 커밋은 addon
+Application이 직접 읽으므로 부모를 거치지 않는다.
 
-한 파일 안에 티어별 ApplicationSet 두 개를 둔다. 승격할 때 두 `targetRevision`을 나란히 읽어야
-하기 때문이다. 두 값이 다르면 승격이 진행 중이고, 같으면 끝난 것이다. 티어를 나누지 않는
-addon(`uniform`)은 블록이 하나다.
+### 버전 표 — `addons/platform/values.yaml`
 
-⛔ **두 블록을 함께 고친다.** 갈려도 되는 값은 `targetRevision` 하나다. values는 양 블록이 같은
-파일을 읽어 갈릴 수 없고, `parameters`·네임스페이스·`syncPolicy`는 갈리면 티어 간 동작이 달라진다.
+승인된 버전은 이 표에만 있다. 템플릿은 `tier`로 줄을 고를 뿐 버전을 적지 않는다.
 
-⚠️ 그 티어의 클러스터가 없으면 대상이 0개가 된다. 사고가 아니라 **빈 슬롯**이고, cluster Secret이
-그 `tier`로 등록되는 순간 팬아웃된다. ArgoCD는 대상 0개를 오류로 보고하지 않으므로, 0이 의도인지
-사고인지는 등록된 cluster Secret의 `tier` 값을 세어 구분한다.
+- **staged**(ALBC · Karpenter · Kyverno 엔진·정책 · Gateway API CRD): `versions.<addon>`에 `prd`·`nonprd`
+  두 줄을 나란히 둔다. 두 값이 다르면 승격이 진행 중이고, 같으면 끝난 것이다. `nonprd`를 먼저 올려
+  비운영 클러스터에서 확인하고 `prd`를 같은 값으로 올린다.
+- **opt-in**(KEDA · cluster-autoscaler): 한 줄이다. 구독한 클러스터가 함께 올라간다.
+- **uniform**(이 저장소의 로컬 차트·정책): 표에 없다. `main`을 따라간다.
+
+⚠️ `tier`가 `prd`·`nonprd`가 아니면 부모 차트가 `required`로 렌더를 실패시켜 그 클러스터의 부모가
+`ComparisonError`로 멈춘다. `environment` 라벨이 없으면 부모 자체가 생기지 않고, ArgoCD는 대상
+0개인 팬아웃을 오류로 보고하지 않는다.
 
 ## helm values — `addons/<addon>/values.yaml`
 
-저장소가 이미 아는 값(tolerations · serviceAccount · replicas)은 `addons/<addon>/values.yaml`에 두고, ApplicationSet이 multi-source의
-`$values/addons/<addon>/values.yaml`로 읽는다. 팬아웃 시점에만 정해지는 값(`{{name}}` · cluster
-Secret 라벨)은 ApplicationSet의 `helm.parameters`에 남는다 — fasttemplate이 파일 안에서는 동작하지
-않기 때문이다.
+저장소가 이미 아는 값(tolerations · serviceAccount · replicas)은 `addons/<addon>/values.yaml`에 두고,
+addon Application이 multi-source의 `$values/addons/<addon>/values.yaml`로 읽는다. 클러스터마다
+갈리는 값(클러스터 이름 · cluster Secret 라벨)은 부모 차트가 addon Application의 `helm.parameters`에
+적는다 — values 파일은 전 클러스터가 같은 파일을 읽기 때문이다.
 
-staged addon(ALBC · Karpenter · Kyverno)은 prd·nonprd 두 ApplicationSet이 **같은 파일**을 읽는다.
-승격 때 갈리는 값은 `targetRevision` 하나이고, values는 갈릴 수 없다. values 파일 안의 주석은
+staged addon은 양 티어가 **같은 파일**을 읽는다. 승격 때 갈리는 값은 버전 표의 한 줄이고, values는
+갈릴 수 없다. values 파일 안의 주석은
 렌더 결과에도 Application spec에도 들어가지 않으므로 고쳐도 `OutOfSync`가 나지 않는다.
 
 ⚠️ values 파일을 `applicationsets/` 안에 두지 않는다. root App의 `include`가 그 디렉토리를
-`**/*.yaml`로 읽으므로, 안에 두면 매니페스트로 읽혀 root App의 렌더가 깨진다. ApplicationSet 안 `helm.values: |` 인라인을 쓰지 않는 근거는 `iac-module-library`의
+`**/*.yaml`로 읽으므로, 안에 두면 매니페스트로 읽혀 root App의 렌더가 깨진다. addon Application 안 `helm.values: |` 인라인을 쓰지 않는 근거는 `iac-module-library`의
 `docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」이 갖는다.
 
 ---
@@ -215,8 +235,9 @@ staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종�
 
 `verify.yml`은 훅과 같은 검사(주석 규칙·`bash -n`·`shellcheck -x`, 버전을 로컬과 같게 핀)에
 세 가지를 더한다. **YAML 전체 파싱**(차트 `templates/`는 Go 템플릿이라 제외), **로컬 차트
-`helm lint`·`helm template`**(`required` 값은 ApplicationSet이 cluster Secret 라벨에서 주입하는
-것이라 대표값을 `--set`으로 준다. 렌더일 뿐 seed가 아니다), **`kyverno test`**(`tests/kyverno/`의
+`helm lint`·`helm template`**(`required` 값은 부모 차트가 cluster Secret 라벨에서 주입하는 것이라
+대표값을 `--set`으로 준다. 렌더일 뿐 seed가 아니다. 부모 차트는 두 티어 × opt-in 구독 유무를 모두
+렌더하고, 없는 `tier`가 렌더 실패가 되는지 본다), **`kyverno test`**(`tests/kyverno/`의
 픽스처로 커스텀 정책의 통과·거부·제외를 판정한다. CLI 버전은 kyverno 차트의 appVersion과 같아야
 한다). 픽스처는 어떤 Application의 source 경로에도 들어가지 않는 `tests/`에 둔다 — `addons/`
 아래 두면 Directory 타입 Application이 파드 픽스처를 클러스터에 적용한다.
@@ -234,8 +255,8 @@ staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종�
 
 - ⛔ **`default` AppProject를 쓰지 않는다** — `sourceRepos`/`destinations`/`clusterResourceWhitelist`가
   전부 `'*'`인 완전 개방 상태다. 플랫폼 리소스는 전용 `platform` 프로젝트에 둔다.
-- 🔑 **cluster Secret의 이름은 실제 EKS 클러스터명이어야 한다** — ApplicationSet의 `{{name}}`이
-  ALBC의 필수 파라미터 `clusterName`으로 그대로 흘러간다. 별칭을 쓰면 조용히 틀린다.
+- 🔑 **cluster Secret의 이름은 실제 EKS 클러스터명이어야 한다** — 부모 차트를 거쳐 ALBC의 필수
+  파라미터 `clusterName`으로 그대로 흘러간다. 별칭을 쓰면 조용히 틀린다.
 - ⚠️ **cluster Secret의 `project` 필드 주의** — 값을 지정하면 그 프로젝트에서만 쓸 수 있는
   project-scoped cluster가 된다. `platform`과 어긋나면 클러스터가 `unknown`으로 뜨는데 증상이
   원인을 가리키지 않는다.
@@ -248,22 +269,21 @@ staged된 `.sh`에는 `bash -n`(문법)과 `shellcheck -x`(인용·확장·종�
 
 ### cluster Secret 라벨 계약
 
-ApplicationSet이 읽는 라벨이다. 빠지면 그 addon만 조용히 안 뜬다.
+ApplicationSet `platform`이 부모 차트에 넘기는 라벨이다.
 
-| 라벨 | 읽는 쪽 | 값 |
-|---|---|---|
-| `environment` | baseline 팬아웃 전체 | `hub` · `dev` 등. 존재 자체가 매칭 조건이다 |
-| `tier` | staged addon의 `-prd`/`-nonprd` 선택 · NodePool 차트의 AMI 핀 선택 | `prd` \| `nonprd` |
-| `vpcName` | ALBC의 `vpcTags.Name` | VPC의 Name 태그 |
-| `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름(`iamr-<workload>-<env>-<region>-karpenter-node`). `eks-cluster` 모듈이 접두 모드를 끄고 고정 이름으로 만들어 재구축해도 같다 |
-| `addon-<name>: enabled` | catalog addon 구독 | `addon-keda` · `addon-cluster-autoscaler` |
-| `decommission` | `gateway` · `karpenter-nodepool` (`DoesNotExist`) | 등록 해제 1단계에서만 붙인다. 존재하면 두 ApplicationSet이 그 클러스터를 놓는다. 값은 읽지 않는다 |
+| 라벨 | 읽는 쪽 | 값 | 빠지면 |
+|---|---|---|---|
+| `environment` | 부모 생성(존재) · `gateway` 차트의 ALB 이름·태그(값) | `hub` · `dev` 등 | 부모가 생기지 않는다. 오류가 보고되지 않는다 |
+| `tier` | 버전 표의 줄 선택 · NodePool 차트의 AMI 핀 선택 | `prd` \| `nonprd` | 부모 렌더가 `required`로 실패한다 |
+| `vpcName` | ALBC의 `vpcTags.Name` | VPC의 Name 태그 | 부모 렌더가 `required`로 실패한다 |
+| `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름(`iamr-<workload>-<env>-<region>-karpenter-node`). `eks-cluster` 모듈이 접두 모드를 끄고 고정 이름으로 만들어 재구축해도 같다 | 부모 렌더가 `required`로 실패한다 |
+| `addon-<name>: enabled` | opt-in addon 구독 | `addon-keda` · `addon-cluster-autoscaler` | 그 addon만 빠진다. 오류가 보고되지 않는다 |
 
-⚠️ **teardown은 `decommission`을 붙여 CR을 먼저 prune하고, 그다음 매칭 라벨을 뗀 뒤 Secret을
-지운다.** 매칭 라벨을 한 번에 떼면 ALBC·Karpenter가 자기 CR보다 먼저 사라져 finalizer가 멈추고 SG가
-고아로 남는다. 설계 근거는 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/aws/`가 갖는다.
-git 이력의 마지막 cluster-secret을 그대로 되살리면 라벨이 빠진 껍데기이고, 그 상태로는 Application이
-하나도 생기지 않는다.
+⚠️ **teardown은 `environment` 라벨을 먼저 떼고, 부모가 hub에서 사라진 뒤 Secret을 지운다.** 라벨을
+떼면 부모가 지워지면서 addon을 wave 역순(CR → 컨트롤러 → CRD)으로 지운다. Secret을 먼저 지우면
+ArgoCD가 목적지를 잃어 spoke 리소스를 지우지 않고 기록만 버린다 — CR의 finalizer와 ALB SG가 남는다.
+명령 순서는 `eks-reference-infra`의 `spoke-lifecycle.md`가 갖는다. git 이력의 마지막 cluster-secret을
+그대로 되살리면 라벨이 빠진 껍데기이고, 그 상태로는 부모가 생기지 않는다.
 
 ### addon 네임스페이스 규칙
 
@@ -302,20 +322,21 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
 기본값이 `false`인데도 baseline이다.
 
 - **baseline**(ALBC·Karpenter·Kyverno·Gateway API): 전 클러스터에 배포.
-- **catalog**(KEDA·cluster-autoscaler): 특정 아키텍처를 선택한 클러스터만 `addon-<name>: enabled`
+- **opt-in**(KEDA·cluster-autoscaler): 특정 아키텍처를 선택한 클러스터만 `addon-<name>: enabled`
   라벨로 구독.
 
-| addon | chart | 버전 | namespace | 배포 방식 |
-|---|---|---|---|---|
-| `argocd`(자기 관리) | `argoproj.github.io/argo-helm` / `argo-cd` | 10.9.1 | `argocd` | seed 흡수, `automated.selfHeal: true` · `prune: false` |
-| `aws-load-balancer-controller` | `aws.github.io/eks-charts` | 3.5.0 | `kube-system` | baseline(전 클러스터, `environment` 라벨 존재 시 매칭) |
-| `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.1 | `kube-system` | baseline |
-| `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | baseline |
-| `kyverno` + `kyverno-policies` | `kyverno.github.io/kyverno` | 3.9.1 | `kyverno` | baseline, `CreateNamespace=true` |
-| Gateway API 표준 CRD | git repo(디렉토리) `kubernetes-sigs/gateway-api` | v1.6.2 | `kube-system`(형식상 값) | baseline. AWS 전용 Gateway CRD는 별도 addon 없이 `aws-load-balancer-controller` chart의 `crds/` 폴더가 이미 설치한다 |
-| `gateway`(GatewayClass·LoadBalancerConfiguration·Gateway) | 로컬 차트(`addons/gateway/shared-gateway/`) | — | `gateway-system` | baseline, `CreateNamespace=true`. HTTPRoute·백엔드는 앱팀 저장소 소관(범위 밖) |
-| `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | opt-in 카탈로그(cluster Secret 라벨 `addon-keda: enabled`) |
-| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0 | `kube-system` | opt-in 카탈로그(cluster Secret 라벨 `addon-cluster-autoscaler: enabled`) — dev 구독 중(taint 분리 검증 완료) |
+| addon | chart | 버전 | namespace | wave | 배포 방식 |
+|---|---|---|---|:---:|---|
+| `argocd`(자기 관리) | `argoproj.github.io/argo-helm` / `argo-cd` | 10.9.1 | `argocd` | — | seed 흡수, `automated.selfHeal: true` · `prune: false`. 부모 밖이다 |
+| Gateway API 표준 CRD | git repo(디렉토리) `kubernetes-sigs/gateway-api` | v1.6.2 | `kube-system`(형식상 값) | 0 | baseline. AWS 전용 Gateway CRD는 별도 addon 없이 `aws-load-balancer-controller` chart의 `crds/` 폴더가 이미 설치한다 |
+| `aws-load-balancer-controller` | `aws.github.io/eks-charts` | 3.5.0 | `kube-system` | 1 | baseline |
+| `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.1 | `kube-system` | 1 | baseline |
+| `kyverno` | `kyverno.github.io/kyverno` | 3.9.1 | `kyverno` | 1 | baseline, `CreateNamespace=true` |
+| `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | 1 | opt-in(cluster Secret 라벨 `addon-keda: enabled`) |
+| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0 | `kube-system` | 1 | opt-in(cluster Secret 라벨 `addon-cluster-autoscaler: enabled`) — dev 구독 중(taint 분리 검증 완료) |
+| `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | 2 | baseline |
+| `gateway`(GatewayClass·LoadBalancerConfiguration·Gateway) | 로컬 차트(`addons/gateway/shared-gateway/`) | — | `gateway-system` | 2 | baseline, `CreateNamespace=true`. HTTPRoute·백엔드는 앱팀 저장소 소관(범위 밖) |
+| `kyverno-policies` · 커스텀 정책 | `kyverno.github.io/kyverno` · `addons/kyverno/custom-policies/` | 3.9.1 · — | `kyverno` | 2 | baseline |
 
 ### 운영 노트
 
@@ -334,18 +355,17 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
   `compare-options: ServerSideDiff=true`도 쓴다 — CRD·ValidatingPolicy의 일부 필드가 apiserver
   기본값으로 채워져 영구 `OutOfSync`가 되는 것을 막는다. `IncludeMutationWebhook=true`는 켜지 않는다
   — 웹훅 변형까지 diff에 들어와 새 drift를 만든다.
-- **Gateway API를 이미 떠 있는 클러스터에 추가할 때**: ALBC는 Gateway API CRD 존재 여부를 파드
-  시작 시점에만 감지하고 캐싱한다 — `gateway-api-crds.yaml`을 ALBC가 이미 오래 떠 있는 클러스터에
-  나중에 추가하면, ALBC 로그에 `Disabling ALBGatewayAPI: missing required CRDs`가 남아있는 채로
-  CRD가 생겨도 재감지하지 않는다(GatewayClass가 `Accepted: Unknown`인 채로 조용히 멈춘다 — 에러가
-  아니다). `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`로
-  재시작하면 즉시 감지·활성화된다. 신규 클러스터를 처음부터 seed할 때도 ALBC 파드와 CRD 생성이
-  같은 sync 안에서 병렬이라, 파드가 몇 초 먼저 뜨면 같은 증상이 난다(그때는 `gateway-api-crds`와
-  `gateway`가 `Degraded`·`Progressing`에 머문다). 로그에 `Disabling ALBGatewayAPI`가 있으면 재시작한다.
+- **ALBC의 Gateway API CRD 감지**: ALBC는 CRD 존재 여부를 파드 시작 시점에만 감지한다. 없으면
+  로그에 `Disabling ALBGatewayAPI: missing required CRDs`를 남기고 재감지하지 않는다(GatewayClass가
+  `Accepted: Unknown`인 채로 조용히 멈춘다 — 에러가 아니다). 부모가 CRD(wave 0)가 Healthy가 된 뒤에
+  ALBC(wave 1)를 만들므로 seed와 spoke 등록에서는 이 상태를 거치지 않는다. 그래도 이 로그가 보이면
+  (health Lua 누락 등으로 wave 대기가 서지 않은 경우)
+  `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`로 재시작한다.
 - **seed 직후 잠시 남는 비정상 상태**: 아래 둘은 재시작이 아니라 기다림이나 refresh로 푼다.
   - `kyverno-policies`·`kyverno-custom-policies`가 `Unknown`이고 조건이 `service ...-kyverno-svc not
-    found`인 것은 Kyverno Service가 생기기 전에 캐시된 비교 오류다. Kyverno가 `Synced`가 된 뒤에도
-    남으면 그 Application에 `argocd.argoproj.io/refresh=hard` 어노테이션을 건다.
+    found`인 것은 Kyverno Service가 생기기 전에 캐시된 비교 오류다. 정책은 엔진(wave 1)이 Healthy가
+    된 뒤에 생기므로 이 상태를 거치지 않아야 한다. 남아 있으면 그 Application에
+    `argocd.argoproj.io/refresh=hard` 어노테이션을 건다.
   - `kyverno`의 sync가 `mservice.elbv2.k8s.aws` 웹훅의 `x509: certificate signed by unknown
     authority`로 재시도 중이면, ALBC 차트가 렌더마다 TLS를 새로 만들어 웹훅 CA와 파드 인증서가
     잠깐 어긋난 것이다. ALBC를 재시작하면 풀린다.

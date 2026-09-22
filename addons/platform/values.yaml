@@ -1,0 +1,63 @@
+# 부모 차트 values — 전 클러스터가 이 파일 하나를 읽는다
+#
+# cluster·addons 는 ApplicationSet(applicationsets/platform.yaml)이 cluster Secret 에서 읽어
+#    helm.parameters 로 넘긴다. 여기 비워 두고 템플릿이 required 로 강제한다.
+
+cluster:
+  name: ""
+  server: ""
+  environment: ""
+  # prd | nonprd 둘뿐이다. versions 표에서 어느 줄을 읽을지 정한다.
+  tier: ""
+  vpcName: ""
+  karpenterNodeRole: ""
+
+# opt-in 구독. cluster Secret 의 addon-<name> 라벨 값이 그대로 온다. enabled 일 때만 렌더한다.
+addons:
+  keda: ""
+  clusterAutoscaler: ""
+
+# 🔑 버전 표. 승인된 버전은 이 표에만 있다. 템플릿은 tier 로 줄을 고를 뿐 버전을 적지 않는다.
+#
+# staged addon 은 prd·nonprd 두 줄을 나란히 둔다. 두 값이 다르면 승격이 진행 중이고, 같으면 끝난
+#    것이다. 승격은 nonprd 를 먼저 올려 비운영 클러스터에서 확인하고 prd 를 같은 값으로 올린다.
+# ⚠️ 승격 구간에는 티어로 나누지 않은 CR(main 핀)이 두 CRD 버전 모두에서 유효해야 한다. 새 버전에서
+#    생긴 필드가 필요하면 승격을 끝내고 커밋한다.
+# opt-in addon 은 한 줄이다. 구독한 클러스터가 함께 올라간다.
+versions:
+  # CRD 뿐이지만 CR(gateway)의 스키마를 정하므로 컨트롤러처럼 승격한다.
+  gatewayApiCrds:
+    prd: v1.6.2
+    nonprd: v1.6.2
+  awsLoadBalancerController:
+    prd: 3.5.0
+    nonprd: 3.5.0
+  # 🔑 OCI 태그가 곧 chart 버전이다. GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
+  #    호환성 매트릭스는 클러스터 1.35에 >= 1.9 를 요구한다.
+  karpenter:
+    prd: 1.14.1
+    nonprd: 1.14.1
+  # ⛔ 엔진과 업스트림 정책은 티어 안에서 **같은 마이너 라인**에 둔다. 차트 번호 일치가 아니라 라인
+  #    일치다. 정책 차트가 요구하는 것은 엔진 app 버전의 하한이고, 그 라인에 짝이 없는 엔진 패치(보안
+  #    백포트가 이 형태로 온다)는 엔진만 올린다. 라인을 넘는 승격은 네 값(엔진·정책 × 티어)을 짝으로
+  #    움직인다.
+  # ⛔ 3.8 라인으로 되돌리지 않는다. 이 엔진이 쓰는 정책 타입은 CEL 기반 policies.kyverno.io/
+  #    ValidatingPolicy 이고, legacy kyverno.io 타입은 v1.19 에서 deprecated, v1.20 에서 제거된다.
+  # ⚠️ 엔진을 올리면 .github/workflows/verify.yml 의 KYVERNO_VERSION 도 그 appVersion 으로 올린다.
+  kyverno:
+    prd: 3.9.1
+    nonprd: 3.9.1
+  kyvernoPolicies:
+    prd: 3.9.1
+    nonprd: 3.9.1
+  # ⚠️ 이 차트는 kubeVersion 제약(>= 1.23)이 있다. 올릴 때 확인한다.
+  keda: 2.20.2
+  # appVersion 이 클러스터 k8s 마이너와 일치하는 것을 고른다. cross-version 은 상류가 테스트하지
+  #    않는다. k8s 를 올릴 때 이 값도 함께 올린다.
+  clusterAutoscaler: 9.59.0
+
+# addon Application 이 values 파일과 로컬 차트를 읽는 저장소. ⚠️ projects/platform.yaml 의
+#    sourceRepos 에 있어야 한다.
+gitops:
+  repoURL: https://github.com/skax-ca/eks-platform-gitops.git
+  targetRevision: main

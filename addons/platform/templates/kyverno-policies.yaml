@@ -1,0 +1,51 @@
+# Kyverno PSS 정책 — wave 2(정책). 업스트림 kyverno-policies 차트, ValidatingPolicy 11개.
+#
+# wave 2 인 이유: 엔진(wave 1)이 만드는 CRD 와 Service 에 기댄다.
+# ⛔ 엔진과 **같은 마이너 라인**을 유지한다(values.yaml 의 versions 표). 정책 내용만 보면 uniform 이
+#    맞지만 엔진이 staged 라 이것도 따라간다.
+# ⛔ policyType 을 적지 않는다. 차트 기본값이 ValidatingPolicy(CEL)이고 그것이 우리가 쓰는 타입이다.
+#    legacy ClusterPolicy 로 되돌리는 값을 넣으면 AppProject whitelist 와 커스텀 정책이 함께 어긋난다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "platform.name" . }}-kyverno-policies
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    # 이것이 없으면 ValidatingPolicy 11개가 영구 OutOfSync 다. 엔진 쪽 CRD 와 같은 원인이다.
+    #    차이 나는 spec.evaluation.admission.enabled·spec.evaluation.background.enabled 는 CRD 스키마의
+    #    default 를 apiserver 가 채운 것이라 어느 매니저도 소유하지 않는다.
+    #    ⚠️ ignoreDifferences 로 열거하면 차트가 기본값을 늘릴 때마다 목록을 따라 늘려야 한다.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+spec:
+  project: platform
+  source:
+    repoURL: https://kyverno.github.io/kyverno/
+    chart: kyverno-policies
+    targetRevision: {{ include "platform.staged" (list . "kyvernoPolicies") }}
+    helm:
+      parameters:
+        # 차트 기본 Fail 에서 바꾼 유일한 값이다. failurePolicy 는 **웹훅에 닿지 못할 때** 무엇을
+        #    하는가이고, validationActions(Audit, 차트 기본)은 **정책을 위반했을 때** 무엇을 하는가다.
+        #    Audit + Fail 은 비정합이다. 아무것도 막지 않기로 해 놓고 Kyverno 가 죽으면 전부 막는다.
+        #    background 스캔이 PolicyReport 를 계속 만들어 잃는 것은 실시간성뿐이다.
+        #    ⚠️ Deny 로 전환할 때 Fail 로 **함께** 올린다. 한쪽만 바꾸면 다시 비정합이다.
+        - name: failurePolicy
+          value: Ignore
+    # ⛔ validationActions·podSecurityStandard 를 적지 않는다. 차트 기본값(Audit·baseline)이 우리가
+    #    원하는 값이고, 기본값을 옮겨 적으면 차트를 올릴 때 그 줄이 조용히 낡는다.
+  destination:
+    server: {{ include "platform.server" . }}
+    # ValidatingPolicy 는 cluster-scoped 라 이 ns 는 형식상 값이다.
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # wave 가 CRD 를 먼저 세우지만, 대기가 서지 않는 경우(Application health Lua 누락)에도 첫 sync 가
+      # dry-run 에서 멈추지 않게 한다.
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true

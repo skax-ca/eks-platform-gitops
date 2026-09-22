@@ -1,7 +1,7 @@
-# Cluster Autoscaler 차트 values — cluster-autoscaler ApplicationSet 이 읽는다
+# Cluster Autoscaler 차트 values — 구독한 클러스터의 cluster-autoscaler Application 이 읽는다
 #
 # 팬아웃 시점에 정해지는 값(autoDiscovery.clusterName)은 여기 없다.
-#    applicationsets/catalog/cluster-autoscaler.yaml 의 helm.parameters 가 넘긴다.
+#    addons/platform/templates/cluster-autoscaler.yaml 의 helm.parameters 가 넘긴다.
 
 # Pod Identity 바인딩 대상(kube-system/cluster-autoscaler). IRSA 애노테이션 불필요.
 # ⚠️ 이 chart 는 ALBC·Karpenter 와 달리 serviceAccount 가 최상위가 아니라 rbac 아래다.

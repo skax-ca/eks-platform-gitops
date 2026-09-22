@@ -20,4 +20,4 @@ tolerations:
 #  · operator·metrics-apiserver·admission-webhooks 각 replicas: 1. podAntiAffinity 없음.
 #    dev 2노드에 무리 없다.
 #  · ⛔ AWS 스케일러용 podIdentity 설정을 켜지 않는다 — Pod Identity association 이 없다
-#    (applicationsets/catalog/keda.yaml 헤더). in-cluster 트리거(cron·prometheus·kafka)만 쓴다.
+#    (addons/platform/templates/keda.yaml 헤더). in-cluster 트리거(cron·prometheus·kafka)만 쓴다.
