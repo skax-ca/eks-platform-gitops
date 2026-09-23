@@ -27,6 +27,8 @@ tier 가 prd·nonprd 가 아니면 렌더를 실패시켜 그 클러스터의 �
 addon Application 의 식별 라벨과 sync-wave. 라벨 계약은 README 「부모 Application — 클러스터마다 하나」가 갖는다.
 wave 는 이 헬퍼 하나가 어노테이션과 라벨에 같이 찍는다. 따로 적으면 wave 를 바꿀 때 한쪽만 고친다.
 사용: {{- include "platform.meta" (list . "aws-lbc" "1") | nindent 2 }}
+⚠️ 출력이 annotations 맵으로 끝난다. 템플릿에서 이 줄 바로 뒤에 들여쓰기 4칸으로 적은 어노테이션은
+   그 맵에 이어진다(kyverno 계열의 compare-options).
 */}}
 {{- define "platform.meta" -}}
 {{- $root := index . 0 -}}
