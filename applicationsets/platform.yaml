@@ -78,3 +78,16 @@ spec:
           # opt-in 해지(라벨 제거)가 이 prune 으로 이루어진다. ⚠️ 그래서 차트에서 addon 템플릿을 지우면
           #    등록된 전 클러스터에서 그 addon 이 wave 역순으로 지워진다.
           prune: true
+        # 🔑 addon Application 의 finalizer 는 diff 하지도, sync 로 되돌리지도 않는다. 차트에 pre-delete
+        #    훅이 있는 addon(kyverno)에 Argo CD 가 pre-delete-finalizer 2개를 런타임에 붙이는데, 이 둘이
+        #    없으면 selfHeal 이 그것을 지우고 Argo CD 가 다시 붙이는 루프가 돈다. 두 설정은 짝이다 —
+        #    ignoreDifferences 만 두면 diff 만 숨고 sync 는 여전히 지운다.
+        # ⚠️ 생성 뒤 resources-finalizer 를 손으로 지워도 부모가 되살리지 않는다. 생성 때는 템플릿 그대로
+        #    붙는다(RespectIgnoreDifferences 는 이미 있는 리소스에만 걸린다).
+        syncOptions:
+          - RespectIgnoreDifferences=true
+      ignoreDifferences:
+        - group: argoproj.io
+          kind: Application
+          jsonPointers:
+            - /metadata/finalizers
