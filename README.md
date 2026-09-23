@@ -363,14 +363,10 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
   ALBC(wave 1)를 만들므로 seed와 spoke 등록에서는 이 상태를 거치지 않는다. 그래도 이 로그가 보이면
   (health Lua 누락 등으로 wave 대기가 서지 않은 경우)
   `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`로 재시작한다.
-- **seed 직후 잠시 남는 비정상 상태**: 아래 둘은 재시작이 아니라 기다림이나 refresh로 푼다.
-  - `kyverno-policies`·`kyverno-custom-policies`가 `Unknown`이고 조건이 `service ...-kyverno-svc not
-    found`인 것은 Kyverno Service가 생기기 전에 캐시된 비교 오류다. 정책은 엔진(wave 1)이 Healthy가
-    된 뒤에 생기므로 이 상태를 거치지 않아야 한다. 남아 있으면 그 Application에
-    `argocd.argoproj.io/refresh=hard` 어노테이션을 건다.
-  - `kyverno`의 sync가 `mservice.elbv2.k8s.aws` 웹훅의 `x509: certificate signed by unknown
-    authority`로 재시도 중이면, ALBC 차트가 렌더마다 TLS를 새로 만들어 웹훅 CA와 파드 인증서가
-    잠깐 어긋난 것이다. ALBC를 재시작하면 풀린다.
+- **ALBC 웹훅의 `x509` 재시도**: `kyverno`의 sync가 `mservice.elbv2.k8s.aws` 웹훅의 `x509: certificate
+  signed by unknown authority`로 재시도 중이면, ALBC 차트가 렌더마다 TLS를 새로 만들어 웹훅 CA와 파드
+  인증서가 잠깐 어긋난 것이다. ALBC를 재시작하면 풀린다. ⚠️ ALBC와 kyverno는 같은 wave 1이라 wave가
+  이 경합을 막지 않는다.
 
 ---
 
