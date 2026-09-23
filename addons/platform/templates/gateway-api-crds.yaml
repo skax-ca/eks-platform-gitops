@@ -18,8 +18,7 @@ metadata:
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
+  {{- include "platform.meta" (list . "gateway-api-crds" "0") | nindent 2 }}
 spec:
   project: platform
   source:

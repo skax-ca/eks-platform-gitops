@@ -18,8 +18,7 @@ metadata:
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
+  {{- include "platform.meta" (list . "kyverno" "1") | nindent 2 }}
     # 이것이 없으면 CRD 11개가 영구 OutOfSync 다. 차이 나는 `spec.conversion` 은 apiserver 가 채운
     #    무소유 필드라 managedFields 기반 ignoreDifferences 로는 잡히지 않는다.
     argocd.argoproj.io/compare-options: ServerSideDiff=true

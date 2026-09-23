@@ -32,6 +32,10 @@ notifications:
 
 configs:
   cm:
+    # 부모의 리소스 트리 노드에 addon 이름과 wave 를 태그로 띄운다. 트리 노드 태그는 라벨이 아니라
+    #    컨트롤러가 채우는 리소스 info 라서, 여기 적은 라벨 키만 info 로 올라간다.
+    # ⚠️ 전역이라 같은 키를 가진 모든 리소스에 태그가 붙는다. platform. 접두사로 다른 차트와 겹치지 않게 한다.
+    resource.customLabels: platform.addon,platform.wave
     # 🔑 부모 Application(<cluster>-platform)의 sync-wave 가 addon 설치 순서가 되게 한다. ArgoCD 는
     #    argoproj.io/Application 의 health 평가를 1.8 에서 뺐고 지금도 내장 체크가 없다. 이 Lua 가
     #    없으면 부모가 addon Application 을 만들자마자 다음 wave 로 넘어가 wave 가 생성 순서만 정한다.

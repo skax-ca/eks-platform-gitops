@@ -22,3 +22,20 @@ tier 가 prd·nonprd 가 아니면 렌더를 실패시켜 그 클러스터의 �
 {{- $row := required (printf "versions.%s 가 없다" $addon) (index $root.Values.versions $addon) -}}
 {{- required (printf "tier 는 prd·nonprd 둘뿐이다(받은 값 %q)" $root.Values.cluster.tier) (index $row $root.Values.cluster.tier) -}}
 {{- end -}}
+
+{{/*
+addon Application 의 식별 라벨과 sync-wave. 라벨 계약은 README 「부모 Application — 클러스터마다 하나」가 갖는다.
+wave 는 이 헬퍼 하나가 어노테이션과 라벨에 같이 찍는다. 따로 적으면 wave 를 바꿀 때 한쪽만 고친다.
+사용: {{- include "platform.meta" (list . "aws-lbc" "1") | nindent 2 }}
+*/}}
+{{- define "platform.meta" -}}
+{{- $root := index . 0 -}}
+{{- $addon := index . 1 -}}
+{{- $wave := index . 2 -}}
+labels:
+  platform.addon: {{ $addon }}
+  platform.cluster: {{ include "platform.name" $root }}
+  platform.wave: {{ $wave | quote }}
+annotations:
+  argocd.argoproj.io/sync-wave: {{ $wave | quote }}
+{{- end -}}
