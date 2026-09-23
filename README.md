@@ -119,7 +119,7 @@ ArgoCD의 읽기에도 자격증명이 없다. 스크립트는 preflight에서 `
 ## root App이 읽는 범위 — `include` allow-list
 
 `bootstrap/root-app.yaml`은 `directory.include`에 적힌 경로만 매니페스트로 읽는다. 지금은
-`projects/`·`clusters/**/cluster-secret.yaml`·`applicationsets/**`·`bootstrap/`의 두 Application
+`projects/`·`clusters/**/cluster-secret.yaml`·`applicationsets/*.yaml`·`bootstrap/`의 두 Application
 파일이다. **그 밖은 무엇이든 무시한다** — `addons/` 전체(부모 차트는 부모가, 로컬 차트·CR 매니페스트는
 addon Application이, `values.yaml`은 multi-source가 따로 읽는다), `bootstrap/argocd-values.yaml`, 도구
 파일 전부.
@@ -127,8 +127,9 @@ addon Application이, `values.yaml`은 multi-source가 따로 읽는다), `boots
 이 저장소는 `exclude`와 `+argocd:skip-file-rendering` 마커를 쓰지 않는다. 기각 근거는
 `iac-module-library`의 `docs/architectures/gitops-hub-spoke/gitops.md` 「하지 않는 것」이 갖는다.
 
-매니페스트 디렉토리를 새로 만들면 `include`에 한 줄 더한다. `applicationsets/` 아래는 하위
-디렉토리까지 전부 읽으므로(`**`), 그 안에서 파일이 늘고 주는 것은 `root-app.yaml`과 무관하다. ⚠️ **렌더가 깨지는 파일이 든 경로**를 `include`에
+매니페스트 디렉토리를 새로 만들면 `include`에 한 줄 더한다. `applicationsets/`는 바로 아래 파일만
+읽는다. ⚠️ `x/**/*.yaml`은 `x` 바로 아래 파일을 잡지 않는다 — `**` 뒤의 `/` 때문에 사이에 디렉토리가
+하나 이상 있어야 매치되고, 빠진 파일은 오류 없이 무시되어 root App이 `Synced`로 남는다. ⚠️ **렌더가 깨지는 파일이 든 경로**를 `include`에
 넣으면 그 spec이 적용된 뒤부터 자기 갱신이 멈춘다. root App은 자기 spec을 클러스터에 적용된
 옛 spec으로 렌더한 뒤에야 갱신하는데, 그 렌더가 깨지면 갱신에 이르지 못한다. 그 파일을 고치는
 커밋이 풀거나, `argocd-seed.sh`의 root Application 단계만 다시 돌려 커밋본 `root-app.yaml`을 손으로 다시 apply한다.
