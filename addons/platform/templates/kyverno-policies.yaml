@@ -12,8 +12,7 @@ metadata:
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
+  {{- include "platform.meta" (list . "kyverno-policies" "2") | nindent 2 }}
     # 이것이 없으면 ValidatingPolicy 11개가 영구 OutOfSync 다. 엔진 쪽 CRD 와 같은 원인이다.
     #    차이 나는 spec.evaluation.admission.enabled·spec.evaluation.background.enabled 는 CRD 스키마의
     #    default 를 apiserver 가 채운 것이라 어느 매니저도 소유하지 않는다.
