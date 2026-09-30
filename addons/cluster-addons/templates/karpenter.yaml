@@ -10,11 +10,11 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-karpenter
+  name: {{ include "cluster-addons.name" . }}-karpenter
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "karpenter" "1") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "karpenter" "1") | nindent 2 }}
 spec:
   project: platform
   sources:
@@ -23,24 +23,24 @@ spec:
     - repoURL: public.ecr.aws/karpenter
       chart: karpenter
       # 노드를 직접 만드는 컨트롤러라 비운영에서 먼저 확인하고 승격한다.
-      targetRevision: {{ include "platform.staged" (list . "karpenter") }}
+      targetRevision: {{ include "cluster-addons.staged" (list . "karpenter") }}
       helm:
         releaseName: karpenter
         parameters:
           # 없으면 helm template 이 실패한다. ⚠️ 그 실패는 rendered 0 + ComparisonError 라 egress
           # 실패와 똑같이 보인다. revision 이 해석됐으면 egress 가 아니라 값 문제다.
           - name: settings.clusterName
-            value: {{ include "platform.name" . }}
+            value: {{ include "cluster-addons.name" . }}
           # SQS 이름이 클러스터명에서 파생되므로 라벨을 새로 만들지 않는다.
           - name: settings.interruptionQueue
-            value: Karpenter-{{ include "platform.name" . }}
+            value: Karpenter-{{ include "cluster-addons.name" . }}
         valueFiles:
           - $values/addons/karpenter/values.yaml
     - repoURL: {{ .Values.gitops.repoURL }}
       targetRevision: {{ .Values.gitops.targetRevision }}
       ref: values
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     namespace: kube-system
   syncPolicy:
     automated:

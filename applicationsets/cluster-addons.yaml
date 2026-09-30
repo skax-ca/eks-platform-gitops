@@ -1,15 +1,15 @@
-# 플랫폼 부모 — 등록된 클러스터마다 부모 Application <cluster>-platform 을 하나 만든다
+# 플랫폼 부모 — 등록된 클러스터마다 부모 Application <cluster>-addons 를 하나 만든다
 #
-# 부모는 addons/platform/ 차트를 렌더해 그 클러스터의 addon Application 전부를 wave 와 함께 만든다.
+# 부모는 addons/cluster-addons/ 차트를 렌더해 그 클러스터의 addon Application 전부를 wave 와 함께 만든다.
 #    어느 addon 을 어떤 버전으로 받는지는 차트가 cluster Secret 라벨로 고른다. 이 파일은 라벨을
 #    helm parameter 로 옮길 뿐이다.
-# 🔑 addon 을 늘리거나 버전을 올릴 때 이 파일을 고치지 않는다. addons/platform/ 을 고친다.
+# 🔑 addon 을 늘리거나 버전을 올릴 때 이 파일을 고치지 않는다. addons/cluster-addons/ 를 고친다.
 #
 # ⚠️ 해제는 2단계다. cluster Secret 에서 environment 라벨을 먼저 빼면 이 ApplicationSet 이 부모를
 #    지우고, 부모의 finalizer 가 addon 을 wave 역순으로 지운다. 부모가 사라진 것을 확인한 뒤 cluster
 #    Secret 을 지운다. Secret 을 먼저 지우면 ArgoCD 가 목적지를 잃어 spoke 리소스를 지우지 않고
 #    기록만 버린다. CR 의 finalizer 와 그 CR 이 만든 AWS 리소스(ALB SG 등)가 남는다.
-# ⚠️ 이름(platform)과 selector 는 배포된 순간 계약이다. 바꾸면 기존 부모가 삭제로 처리되어 전
+# ⚠️ 이름(cluster-addons)과 selector 는 배포된 순간 계약이다. 바꾸면 기존 부모가 삭제로 처리되어 전
 #    클러스터의 addon 이 지워진다.
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/gitops.md ·
@@ -17,7 +17,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: platform
+  name: cluster-addons
   namespace: argocd
 spec:
   # 라벨을 index 로 읽으려고 Go 템플릿을 쓴다. missingkey=error 는 .name·.server 오타를 빈
@@ -34,10 +34,10 @@ spec:
               operator: Exists
   template:
     metadata:
-      name: '{{ .name }}-platform'
+      name: '{{ .name }}-addons'
       # addon Application 과 같은 식별 라벨. 한 클러스터의 부모와 addon 을 한 selector 로 고른다.
       labels:
-        platform.cluster: '{{ .name }}'
+        addon.cluster: '{{ .name }}'
       # ⛔ 빼지 않는다. root-app 과 달리 부모에는 cascade 가 있어야 해제 1단계가 addon 을 지운다.
       finalizers:
         - resources-finalizer.argocd.argoproj.io
@@ -46,7 +46,7 @@ spec:
       source:
         repoURL: https://github.com/skax-ca/eks-platform-gitops.git
         targetRevision: main
-        path: addons/platform
+        path: addons/cluster-addons
         helm:
           # 🔑 라벨은 전부 index 로 읽는다. 라벨 맵이 map[string]string 이라 없는 키가 빈 문자열이 되고,
           #    차트의 required 가 그 클러스터의 부모만 ComparisonError 로 세운다. .metadata.labels.x 로

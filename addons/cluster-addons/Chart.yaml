@@ -1,7 +1,7 @@
 apiVersion: v2
-name: platform
+name: cluster-addons
 description: |
-  클러스터 하나의 플랫폼 addon Application 전부 — 부모 Application <cluster>-platform 이 렌더한다.
+  클러스터 하나의 플랫폼 addon Application 전부 — 부모 Application <cluster>-addons 가 렌더한다.
 
   🔑 addon Application 을 ApplicationSet 이 직접 만들지 않고 이 차트가 만드는 이유는 순서다. 부모가
      addon Application 을 자기 리소스로 sync 해야 sync-wave 가 설치 순서(앞 wave 가 Healthy 가 된 뒤

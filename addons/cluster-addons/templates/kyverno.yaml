@@ -14,11 +14,11 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-kyverno
+  name: {{ include "cluster-addons.name" . }}-kyverno
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "kyverno" "1") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "kyverno" "1") | nindent 2 }}
     # 이것이 없으면 CRD 11개가 영구 OutOfSync 다. 차이 나는 `spec.conversion` 은 apiserver 가 채운
     #    무소유 필드라 managedFields 기반 ignoreDifferences 로는 잡히지 않는다.
     argocd.argoproj.io/compare-options: ServerSideDiff=true
@@ -27,7 +27,7 @@ spec:
   sources:
     - repoURL: https://kyverno.github.io/kyverno/
       chart: kyverno
-      targetRevision: {{ include "platform.staged" (list . "kyverno") }}
+      targetRevision: {{ include "cluster-addons.staged" (list . "kyverno") }}
       helm:
         valueFiles:
           - $values/addons/kyverno/values.yaml
@@ -35,7 +35,7 @@ spec:
       targetRevision: {{ .Values.gitops.targetRevision }}
       ref: values
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     namespace: kyverno
   syncPolicy:
     automated:

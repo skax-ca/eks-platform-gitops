@@ -14,20 +14,20 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-gateway-api-crds
+  name: {{ include "cluster-addons.name" . }}-gateway-api-crds
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "gateway-api-crds" "0") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "gateway-api-crds" "0") | nindent 2 }}
 spec:
   project: platform
   source:
     repoURL: https://github.com/kubernetes-sigs/gateway-api.git
-    targetRevision: {{ include "platform.staged" (list . "gatewayApiCrds") }}
+    targetRevision: {{ include "cluster-addons.staged" (list . "gatewayApiCrds") }}
     # kustomization.yaml 이 없는 순수 YAML 디렉토리라 ArgoCD 가 Directory 타입으로 렌더한다.
     path: config/crd/standard
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     # CRD 는 cluster-scoped 라 이 ns 는 형식상 값이다.
     namespace: kube-system
   syncPolicy:

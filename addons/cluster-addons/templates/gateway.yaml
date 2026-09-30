@@ -9,11 +9,11 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-gateway
+  name: {{ include "cluster-addons.name" . }}-gateway
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "gateway" "2") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "gateway" "2") | nindent 2 }}
 spec:
   project: platform
   source:
@@ -26,7 +26,7 @@ spec:
         - name: environment
           value: {{ required "cluster.environment 가 비었다(cluster Secret environment 라벨)" .Values.cluster.environment }}
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     namespace: gateway-system
   syncPolicy:
     automated:

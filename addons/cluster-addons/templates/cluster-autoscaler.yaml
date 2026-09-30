@@ -14,11 +14,11 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-cluster-autoscaler
+  name: {{ include "cluster-addons.name" . }}-cluster-autoscaler
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "cluster-autoscaler" "1") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "cluster-autoscaler" "1") | nindent 2 }}
 spec:
   project: platform
   sources:
@@ -31,7 +31,7 @@ spec:
           # autoDiscovery.tags 기본값이 AWS 가 managed node group 에 자동으로 붙이는 두 태그와
           # 같아서 clusterName 하나만 주면 된다.
           - name: autoDiscovery.clusterName
-            value: {{ include "platform.name" . }}
+            value: {{ include "cluster-addons.name" . }}
           - name: awsRegion
             value: ap-northeast-2
           - name: cloudProvider
@@ -42,7 +42,7 @@ spec:
       targetRevision: {{ .Values.gitops.targetRevision }}
       ref: values
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     namespace: kube-system
   syncPolicy:
     automated:

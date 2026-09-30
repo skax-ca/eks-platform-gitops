@@ -19,7 +19,7 @@
 - [`bootstrap/argocd-seed.sh` — 이 저장소가 소유한다](#bootstrapargocd-seedsh--이-저장소가-소유한다)
 - [root App이 읽는 범위 — `include` allow-list](#root-app이-읽는-범위--include-allow-list)
 - [부모 Application — 클러스터마다 하나](#부모-application--클러스터마다-하나)
-  - [버전 표 — `addons/platform/values.yaml`](#버전-표--addonsplatformvaluesyaml)
+  - [버전 표 — `addons/cluster-addons/values.yaml`](#버전-표--addonscluster-addonsvaluesyaml)
 - [helm values — `addons/<addon>/values.yaml`](#helm-values--addonsaddonvaluesyaml)
 - [게이트 — 로컬 훅과 CI](#게이트--로컬-훅과-ci)
 - [알아야 할 규약](#알아야-할-규약)
@@ -65,8 +65,8 @@ bootstrap/argocd-app.yaml    # ArgoCD 자기 관리 Application. 위 values를 $
 bootstrap/argocd-seed.sh     # seed 실행 스크립트. 이 저장소가 소유한다(아래 절)
 clusters/<env>/<cluster>/    # cluster Secret. 새 클러스터 = 디렉토리 1개(O(1))
 projects/                    # AppProject 가드레일 — platform.yaml + <team>.yaml
-applicationsets/platform.yaml # 클러스터마다 부모 Application을 만드는 ApplicationSet. root App이 읽는다
-addons/platform/             # 부모 차트. 그 클러스터의 addon Application 전부와 wave·버전 표. root App은 읽지 않는다
+applicationsets/cluster-addons.yaml # 클러스터마다 부모 Application을 만드는 ApplicationSet. root App이 읽는다
+addons/cluster-addons/             # 부모 차트. 그 클러스터의 addon Application 전부와 wave·버전 표. root App은 읽지 않는다
 addons/<addon>/              # addon Application의 source가 읽는 내용물. root App은 읽지 않는다
 addons/<addon>/values.yaml   #   업스트림 차트 helm values. 티어 쌍이 같은 파일을 읽는다(아래 "helm values" 절)
 addons/gateway/shared-gateway/  #   GatewayClass·Gateway·LoadBalancerConfiguration 로컬 helm 차트(per-cluster 값 주입)
@@ -142,8 +142,8 @@ addon Application이, `values.yaml`은 multi-source가 따로 읽는다), `boots
 
 ## 부모 Application — 클러스터마다 하나
 
-`applicationsets/platform.yaml`이 cluster Secret마다 부모 `<cluster>-platform`을 만들고, 부모가
-`addons/platform/` 차트로 그 클러스터의 addon Application을 렌더한다. 부모를 두는 이유는 순서다.
+`applicationsets/cluster-addons.yaml`이 cluster Secret마다 부모 `<cluster>-addons`를 만들고, 부모가
+`addons/cluster-addons/` 차트로 그 클러스터의 addon Application을 렌더한다. 부모를 두는 이유는 순서다.
 부모가 addon Application을 자기 리소스로 sync해야 sync-wave가 설치 순서(앞 wave가 Healthy가 된 뒤
 다음 wave)와 해제 순서(wave 역순, 삭제 완료 대기)가 된다. 설계 근거는 `iac-module-library`의
 `docs/architectures/gitops-hub-spoke/ordering.md`가 갖는다.
@@ -159,23 +159,23 @@ addon Application이, `values.yaml`은 multi-source가 따로 읽는다), `boots
 | 항목 | 규약 |
 |---|---|
 | wave | addon Application의 `argocd.argoproj.io/sync-wave`. 기대는 addon보다 크게 둔다. 대기는 `bootstrap/argocd-values.yaml`의 Application health Lua가 있어야 선다. 없으면 wave가 생성 순서만 정한다 |
-| 식별 라벨 | addon Application에 `platform.addon`·`platform.cluster`·`platform.wave`, 부모에 `platform.cluster`. 이름의 `<cluster>-` 접두사가 콘솔에서 잘려 addon이 가려지므로 식별은 라벨로 한다(`kubectl -n argocd get applications -l platform.cluster=<cluster> -L platform.addon,platform.wave`, `argocd app list -l platform.addon=<addon>`). 라벨과 sync-wave 어노테이션은 `_helpers.tpl`의 `platform.meta` 하나가 찍는다. 트리 노드 태그는 `bootstrap/argocd-values.yaml`의 `resource.customLabels`가 띄운다 |
+| 식별 라벨 | addon Application에 `addon.name`·`addon.cluster`·`addon.wave`, 부모에 `addon.cluster`. 이름의 `<cluster>-` 접두사가 콘솔에서 잘려 addon이 가려지므로 식별은 라벨로 한다(`kubectl -n argocd get applications -l addon.cluster=<cluster> -L addon.name,addon.wave`, `argocd app list -l addon.name=<addon>`). 라벨과 sync-wave 어노테이션은 `_helpers.tpl`의 `platform.meta` 하나가 찍는다. 트리 노드 태그는 `bootstrap/argocd-values.yaml`의 `resource.customLabels`가 띄운다 |
 | `finalizers` | 부모와 addon Application 모두 `resources-finalizer.argocd.argoproj.io`를 둔다. 부모의 것이 해제 때 addon을 wave 역순으로 지우고, addon의 것이 클러스터 실물을 지운다 |
 | `releaseName` | Application 이름과 분리한다. 없으면 `<cluster>-<addon>`이 리소스 이름에 전파돼 63자 제한에 걸린다 |
 | `ref: values` source | `ref`만 있고 `path`/`chart`가 없어 렌더 대상이 아니다. `$values`가 이 저장소 루트를 가리키게 하는 것이 전부다 |
-| 부모 `prune: true` | opt-in 해지(라벨 제거)가 부모의 prune으로 이루어진다. ⚠️ 그래서 `addons/platform/templates/`에서 파일을 지우면 등록된 전 클러스터에서 그 addon이 지워진다 |
+| 부모 `prune: true` | opt-in 해지(라벨 제거)가 부모의 prune으로 이루어진다. ⚠️ 그래서 `addons/cluster-addons/templates/`에서 파일을 지우면 등록된 전 클러스터에서 그 addon이 지워진다 |
 
-⚠️ **돌고 있는 클러스터가 있을 때 ApplicationSet `platform`의 이름·selector나 addon 템플릿의
+⚠️ **돌고 있는 클러스터가 있을 때 ApplicationSet `cluster-addons`의 이름·selector나 addon 템플릿의
 `metadata.name`을 바꾸지 않는다.** 이름이 바뀌면 삭제로 처리되고, finalizer가 **실물까지 prune한다.**
 정리할 수 있는 시점은 전면 철거 이후 seed 이전뿐이다.
 
 ⚠️ **부모가 앞 wave를 기다리며 멈췄을 때**: 앞 wave의 addon이 Healthy가 되지 못하면 부모의 sync
 operation이 끝나지 않고, 그동안 버전 표를 고친 커밋이 addon Application에 반영되지 않는다. ArgoCD의
-sync 타임아웃 기본값이 무제한이라 스스로 풀리지 않는다. `argocd app terminate-op <cluster>-platform`으로
+sync 타임아웃 기본값이 무제한이라 스스로 풀리지 않는다. `argocd app terminate-op <cluster>-addons`로
 끊으면 다음 auto-sync가 새 커밋으로 돈다. `addons/<addon>/values.yaml`만 고친 커밋은 addon
 Application이 직접 읽으므로 부모를 거치지 않는다.
 
-### 버전 표 — `addons/platform/values.yaml`
+### 버전 표 — `addons/cluster-addons/values.yaml`
 
 승인된 버전은 이 표에만 있다. 템플릿은 `tier`로 줄을 고를 뿐 버전을 적지 않는다.
 
@@ -284,7 +284,7 @@ repo-server가 쓰는 `gobwas/glob`(ArgoCD `go.mod`와 같은 버전)을 구분�
 
 ### cluster Secret 라벨 계약
 
-ApplicationSet `platform`이 부모 차트에 넘기는 라벨이다.
+ApplicationSet `cluster-addons`가 부모 차트에 넘기는 라벨이다.
 
 | 라벨 | 읽는 쪽 | 값 | 빠지면 |
 |---|---|---|---|
