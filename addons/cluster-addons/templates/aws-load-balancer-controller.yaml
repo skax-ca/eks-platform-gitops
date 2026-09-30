@@ -11,23 +11,23 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-aws-lbc
+  name: {{ include "cluster-addons.name" . }}-aws-lbc
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "aws-lbc" "1") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "aws-lbc" "1") | nindent 2 }}
 spec:
   project: platform
   sources:
     - repoURL: https://aws.github.io/eks-charts
       chart: aws-load-balancer-controller
       # 트래픽을 받는 ALB 를 직접 움직이므로 비운영에서 먼저 확인하고 승격한다.
-      targetRevision: {{ include "platform.staged" (list . "awsLoadBalancerController") }}
+      targetRevision: {{ include "cluster-addons.staged" (list . "awsLoadBalancerController") }}
       helm:
         releaseName: aws-lbc
         parameters:
           - name: clusterName
-            value: {{ include "platform.name" . }}
+            value: {{ include "cluster-addons.name" . }}
           # vpcId 가 아니라 태그로 찾는다. 노드 IMDSv2 hop limit=1 이라 파드에서 VPC 자동 탐지가 안
           #    되고(ec2imds context deadline exceeded 로 CrashLoop), AWS 발급 ID 는 재구축마다 바뀌는
           #    반면 Name 태그는 네이밍 규칙이 고정한다.
@@ -43,7 +43,7 @@ spec:
       targetRevision: {{ .Values.gitops.targetRevision }}
       ref: values
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     namespace: kube-system
   syncPolicy:
     automated:

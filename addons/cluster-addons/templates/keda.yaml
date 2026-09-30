@@ -10,11 +10,11 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-keda
+  name: {{ include "cluster-addons.name" . }}-keda
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "keda" "1") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "keda" "1") | nindent 2 }}
 spec:
   project: platform
   sources:
@@ -28,7 +28,7 @@ spec:
       targetRevision: {{ .Values.gitops.targetRevision }}
       ref: values
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     namespace: keda
   syncPolicy:
     automated:

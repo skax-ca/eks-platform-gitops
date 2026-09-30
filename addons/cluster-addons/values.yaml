@@ -1,6 +1,6 @@
 # 부모 차트 values — 전 클러스터가 이 파일 하나를 읽는다
 #
-# cluster·addons 는 ApplicationSet(applicationsets/platform.yaml)이 cluster Secret 에서 읽어
+# cluster·addons 는 ApplicationSet(applicationsets/cluster-addons.yaml)이 cluster Secret 에서 읽어
 #    helm.parameters 로 넘긴다. 여기 비워 두고 템플릿이 required 로 강제한다.
 
 cluster:

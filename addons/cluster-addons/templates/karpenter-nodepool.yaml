@@ -14,11 +14,11 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ include "platform.name" . }}-karpenter-nodepool
+  name: {{ include "cluster-addons.name" . }}-karpenter-nodepool
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-  {{- include "platform.meta" (list . "karpenter-nodepool" "2") | nindent 2 }}
+  {{- include "cluster-addons.meta" (list . "karpenter-nodepool" "2") | nindent 2 }}
 spec:
   project: platform
   source:
@@ -29,7 +29,7 @@ spec:
     helm:
       parameters:
         - name: clusterName
-          value: {{ include "platform.name" . }}
+          value: {{ include "cluster-addons.name" . }}
         # 🔑 클러스터명에서 파생할 수 없는 값이다(upstream 기본값은 role 이름에 무작위 접미가 붙는다).
         - name: nodeRole
           value: {{ required "cluster.karpenterNodeRole 이 비었다(cluster Secret karpenterNodeRole 라벨)" .Values.cluster.karpenterNodeRole }}
@@ -37,7 +37,7 @@ spec:
         - name: tier
           value: {{ .Values.cluster.tier }}
   destination:
-    server: {{ include "platform.server" . }}
+    server: {{ include "cluster-addons.server" . }}
     # CR 은 cluster-scoped 라 이 ns 는 형식상 값이다.
     namespace: kube-system
   syncPolicy:
