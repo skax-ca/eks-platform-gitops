@@ -1,4 +1,4 @@
-# Kyverno 엔진 차트 values — kyverno-prd·kyverno-nonprd 두 ApplicationSet 이 같은 파일을 읽는다
+# Kyverno 엔진 차트 values — prd·nonprd 가 같은 파일을 읽는다
 #
 # 차트 기본값을 그대로 받고 스케줄 전제 하나만 넘긴다. 기본값과 다른 것만 적는다.
 
