@@ -158,7 +158,7 @@ addon Application이, `values.yaml`은 multi-source가 따로 읽는다), `boots
 
 | 항목 | 규약 |
 |---|---|
-| wave | addon Application의 `argocd.argoproj.io/sync-wave`. 기대는 addon보다 크게 둔다. 대기는 `bootstrap/argocd-values.yaml`의 Application health Lua가 있어야 선다. 없으면 wave가 생성 순서만 정한다 |
+| wave | addon Application의 `argocd.argoproj.io/sync-wave`. 기대는 addon보다 크게 둔다. 대기는 `bootstrap/argocd-values.yaml`의 Application health Lua가 있어야 선다. 없으면 wave가 생성 순서만 정한다. Lua는 addon Application(`addon.name` 라벨)이 `Synced`이고 sync가 돌고 있지 않을 때만 `Healthy`로 본다. 막 만들어진 Application이 `OutOfSync` + `Healthy`라서다 |
 | 식별 라벨 | addon Application에 `addon.name`·`addon.cluster`·`addon.wave`, 부모에 `addon.cluster`. 이름의 `<cluster>-` 접두사가 콘솔에서 잘려 addon이 가려지므로 식별은 라벨로 한다(`kubectl -n argocd get applications -l addon.cluster=<cluster> -L addon.name,addon.wave`, `argocd app list -l addon.name=<addon>`). 라벨과 sync-wave 어노테이션은 `_helpers.tpl`의 `cluster-addons.meta` 하나가 찍는다. 트리 노드 태그는 `bootstrap/argocd-values.yaml`의 `resource.customLabels`가 띄운다 |
 | `finalizers` | 부모와 addon Application 모두 `resources-finalizer.argocd.argoproj.io`를 둔다. 부모의 것이 해제 때 addon을 wave 역순으로 지우고, addon의 것이 클러스터 실물을 지운다 |
 | `releaseName` | Application 이름과 분리한다. 없으면 `<cluster>-<addon>`이 리소스 이름에 전파돼 63자 제한에 걸린다 |
@@ -169,7 +169,8 @@ addon Application이, `values.yaml`은 multi-source가 따로 읽는다), `boots
 `metadata.name`을 바꾸지 않는다.** 이름이 바뀌면 삭제로 처리되고, finalizer가 **실물까지 prune한다.**
 정리할 수 있는 시점은 전면 철거 이후 seed 이전뿐이다.
 
-⚠️ **부모가 앞 wave를 기다리며 멈췄을 때**: 앞 wave의 addon이 Healthy가 되지 못하면 부모의 sync
+⚠️ **부모가 앞 wave를 기다리며 멈췄을 때**: 앞 wave의 addon이 Healthy가 되지 못하거나 `OutOfSync`로
+고착되면(대개 CRD 스키마 defaulting, 그 Application에 `ServerSideDiff=true`를 켠다) 부모의 sync
 operation이 끝나지 않고, 그동안 버전 표를 고친 커밋이 addon Application에 반영되지 않는다. ArgoCD의
 sync 타임아웃 기본값이 무제한이라 스스로 풀리지 않는다. `argocd app terminate-op <cluster>-addons`로
 끊으면 다음 auto-sync가 새 커밋으로 돈다. `addons/<addon>/values.yaml`만 고친 커밋은 addon

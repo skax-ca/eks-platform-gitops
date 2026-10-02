@@ -39,9 +39,16 @@ configs:
     # 🔑 부모 Application(<cluster>-addons)의 sync-wave 가 addon 설치 순서가 되게 한다. ArgoCD 는
     #    argoproj.io/Application 의 health 평가를 1.8 에서 뺐고 지금도 내장 체크가 없다. 이 Lua 가
     #    없으면 부모가 addon Application 을 만들자마자 다음 wave 로 넘어가 wave 가 생성 순서만 정한다.
-    #    Lua 는 ArgoCD 1.7→1.8 업그레이드 문서의 것 그대로다.
-    # ⚠️ 전역 설정이라 root-app 에도 걸린다. root-app 의 health 가 이 파일의 자기 관리 Application 과
-    #    부모들의 health 를 반영한다.
+    #    앞부분은 ArgoCD 1.7→1.8 업그레이드 문서의 Lua 다.
+    # 🔑 addon Application(addon.name 라벨)은 아래 둘이 다 맞아야 Healthy 다. status.health 는 클러스터에
+    #    있는 리소스만으로 계산돼서, 그것만 보면 부모가 기다리지 않고 다음 wave 로 넘어간다.
+    #      ① Synced 다 — 막 만들어진 Application 은 아무것도 배포하지 않은 채 OutOfSync + Healthy 다
+    #      ② sync 가 돌고 있지 않다 — 리소스는 맞췄어도 hook(마이그레이션 Job 등)이 남아 있을 수 있다
+    # ⛔ 라벨 조건을 빼지 않는다. 전역 설정이라 root-app·자기 관리 Application·부모에도 이 Lua 가 걸린다.
+    #    조건 없이 걸면 OutOfSync 인 것이 하나만 있어도 root-app 의 health 가 Progressing 에 머문다.
+    # ⚠️ addon 이 OutOfSync 로 고착되면 리소스가 전부 Healthy 여도 부모가 그 wave 에서 멈춘다. 푸는
+    #    방법은 README 「부모 Application — 클러스터마다 하나」의 ⚠️ 가 갖는다.
+    # ⚠️ root-app 의 health 가 이 파일의 자기 관리 Application 과 부모들의 health 를 반영한다.
     resource.customizations.health.argoproj.io_Application: |
       hs = {}
       hs.status = "Progressing"
@@ -52,6 +59,20 @@ configs:
           if obj.status.health.message ~= nil then
             hs.message = obj.status.health.message
           end
+        end
+      end
+      local labels = obj.metadata.labels
+      if hs.status == "Healthy" and labels ~= nil and labels["addon.name"] ~= nil then
+        local waiting = nil
+        local op = obj.status.operationState
+        if obj.status.sync == nil or obj.status.sync.status ~= "Synced" then
+          waiting = "waiting for sync"
+        elseif op ~= nil and op.phase == "Running" then
+          waiting = "waiting for sync operation to finish"
+        end
+        if waiting ~= nil then
+          hs.status = "Progressing"
+          hs.message = waiting
         end
       end
       return hs
