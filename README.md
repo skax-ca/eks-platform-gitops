@@ -280,7 +280,7 @@ repo-server가 쓰는 `gobwas/glob`(ArgoCD `go.mod`와 같은 버전)을 구분�
   `InvalidSpecError`로 sync 자체가 안 선다. addon을 추가할 때마다 그 chart repo를 추가한다.
 - ⚠️ **`clusterResourceWhitelist`는 `[]`로 시작한다** — addon마다 그 addon이 실제로 만드는 kind만
   명시 개방한다.
-- **cert-manager · external-dns · 관측성 컨트롤러는 여기 없다** — Terraform community addon 소관이고,
+- **external-dns · 관측성 컨트롤러는 여기 없다** — Terraform community addon 소관이고,
   이 저장소에는 그 설정(CR·애노테이션)만 놓인다.
 
 ### cluster Secret 라벨 계약
