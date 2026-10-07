@@ -52,3 +52,34 @@ spec:
     syncOptions:
       # CRD 가 커서 client-side apply 의 애노테이션 크기 한도에 걸린다.
       - ServerSideApply=true
+      # 아래 ignoreDifferences 와 짝이다. 이것이 없으면 diff 만 숨고 sync 는 여전히 덮어쓴다.
+      - RespectIgnoreDifferences=true
+  # 🔑 웹훅 TLS 는 처음 만들어진 것을 그대로 둔다. 차트가 렌더할 때마다 CA 와 인증서를 새로
+  #    만들어(genCA), 이것이 없으면 Argo CD 가 렌더가 바뀔 때마다 Secret 과 웹훅 caBundle 을 다시
+  #    쓴다. 파드가 새 Secret 을 읽기 전까지 caBundle 과 파드 인증서가 어긋나고, 그동안 이 웹훅을
+  #    거치는 요청이 `x509: certificate signed by unknown authority` 로 거부된다. mservice 웹훅이
+  #    전 네임스페이스의 Service 를 받으므로 같은 클러스터의 다른 addon sync 가 함께 멈춘다.
+  #    차트의 keepTLSSecret 은 helm lookup 에 기대는데 Argo CD 의 렌더에는 클러스터가 없어 듣지 않는다.
+  # ⚠️ RespectIgnoreDifferences 는 이미 있는 리소스에만 걸린다. 최초 생성 때는 렌더 값이 그대로
+  #    들어가고, Secret 과 웹훅 둘이 같은 렌더에서 나와야 짝이 맞는다. 어긋난 채 굳으면 Secret 과
+  #    웹훅 설정 둘을 함께 지워 다시 만들게 한다(README 「운영 노트」).
+  # ⚠️ 인증서 유효 기간은 차트가 정한 3650일이고 갱신하는 것이 없다. 클러스터를 그보다 오래 두면
+  #    위와 같은 방법으로 다시 만든다.
+  # ⚠️ 차트가 웹훅 설정을 늘리면(kind 나 이름이 바뀌면) 이 목록도 따라 늘린다. 빠진 쪽은 caBundle 만
+  #    새 렌더 값으로 바뀌어 그 웹훅이 계속 거부한다.
+  ignoreDifferences:
+    - kind: Secret
+      name: aws-load-balancer-tls
+      namespace: kube-system
+      jsonPointers:
+        - /data
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: aws-load-balancer-webhook
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: aws-load-balancer-webhook
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle

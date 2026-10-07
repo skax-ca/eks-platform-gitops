@@ -377,10 +377,28 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
   ALBC(wave 1)를 만들므로 seed와 spoke 등록에서는 이 상태를 거치지 않는다. 그래도 이 로그가 보이면
   (health Lua 누락 등으로 wave 대기가 서지 않은 경우)
   `kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller`로 재시작한다.
-- **ALBC 웹훅의 `x509` 재시도**: `kyverno`의 sync가 `mservice.elbv2.k8s.aws` 웹훅의 `x509: certificate
-  signed by unknown authority`로 재시도 중이면, ALBC 차트가 렌더마다 TLS를 새로 만들어 웹훅 CA와 파드
-  인증서가 잠깐 어긋난 것이다. ALBC를 재시작하면 풀린다. ⚠️ ALBC와 kyverno는 같은 wave 1이라 wave가
-  이 경합을 막지 않는다.
+- **ALBC 웹훅 TLS는 처음 만든 것을 유지한다**: ALBC 차트는 렌더마다 웹훅 CA와 인증서를 새로 만든다.
+  `aws-lbc` Application이 Secret `aws-load-balancer-tls`의 `data`와 웹훅 설정 2개의 `caBundle`을
+  `ignoreDifferences` + `RespectIgnoreDifferences=true`로 묶어, 만들어진 뒤에는 Argo CD가 다시 쓰지
+  않는다. 이것이 없으면 다시 쓸 때마다 웹훅 CA와 파드 인증서가 잠깐 어긋나고, 그동안 그 클러스터의
+  Service 생성·수정이 `x509: certificate signed by unknown authority`로 거부된다(같은 wave의 `kyverno`
+  sync가 재시도로 몇 분 늦어지는 것이 대표 증상이다).
+  - ⚠️ ALBC와 kyverno는 같은 wave 1이다. ALBC 파드가 뜨기 전에 kyverno의 Service가 먼저 닿으면
+    `no endpoints available for service "aws-load-balancer-webhook-service"`로 한 번 재시도한다.
+    위 설정이 막는 것은 `x509` 쪽이고 이 경합은 남는다.
+  - 다른 addon의 sync가 `x509`로 계속 재시도하면 Secret과 `caBundle`이 서로 다른 렌더에서 굳은
+    것이다. 셋을 함께 지워 같은 렌더로 다시 만들게 하고 ALBC를 재시작한다.
+    ```bash
+    kubectl -n kube-system delete secret aws-load-balancer-tls
+    kubectl delete mutatingwebhookconfiguration,validatingwebhookconfiguration aws-load-balancer-webhook
+    argocd app sync <cluster>-aws-lbc
+    kubectl -n kube-system rollout restart deploy/aws-lbc-aws-load-balancer-controller
+    ```
+  - 인증서 유효 기간은 차트가 정한 3650일이고 갱신하는 것이 없다. 그보다 오래 두는 클러스터는 위
+    절차로 다시 만든다.
+  - ⏳ `RespectIgnoreDifferences`가 `caBundle`의 배열 경로(`.webhooks[]?.clientConfig.caBundle`)에도
+    걸리는지는 살아 있는 클러스터에서 확인한다. `aws-lbc`를 hard refresh한 뒤 Secret의
+    `metadata.managedFields[*].time`이 그대로면 걸린 것이다.
 
 ---
 
