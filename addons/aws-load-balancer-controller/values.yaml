@@ -3,12 +3,17 @@
 # 팬아웃 시점에 정해지는 값(clusterName·vpcTags.Name)은 여기 없다.
 #    addons/cluster-addons/templates/aws-load-balancer-controller.yaml 의 helm.parameters 가 넘긴다.
 
-# system 관리형 노드그룹의 CriticalAddonsOnly=true:NoSchedule taint 를 넘는다.
+# system 노드그룹으로 끌어당기고(nodeSelector) 그 taint 를 통과한다(tolerations).
 #    Karpenter 가 아직 없는 부트스트랩 시점에는 system 2노드가 유일한 스케줄 대상이다.
-#    ⚠️ 고정이 아니라 허용이다. nodeSelector 를 주지 않으므로 Karpenter 노드가 생긴 뒤에는 어느
-#    쪽에 있어도 된다.
+# 🔑 허용(toleration)에서 멈추지 않고 고정한다. toleration 만 있으면 재시작 한 번으로 Karpenter 노드에
+#    뜰 수 있고, 해제 때 그 자리가 문제가 된다. 부모가 gateway 와 karpenter-nodepool 을 같은 wave 에서
+#    지우므로, Gateway 의 ALB·SG 를 걷는 중인 리더 파드가 NodePool 삭제로 퇴거된다. 넘겨받은 리더는
+#    공유 backend SG(`elbv2.k8s.aws/resource=backend-sg`)를 지우지 않아 그 SG 가 VPC 에 고아로 남고
+#    networking destroy 를 막는다. Argo CD 에는 아무 오류도 뜨지 않는다.
 #    차트의 top-level 키다(argo-cd 차트의 global.tolerations 와 달리 여기는 이 이름 그대로다).
-#    ⚠️ 차트 기본값이 비어 있어 직접 쓴다. coredns·Karpenter 처럼 기본값에 기댈 수 없다.
+#    ⚠️ tolerations 는 차트 기본값이 비어 있어 직접 쓴다. coredns·Karpenter 처럼 기본값에 기댈 수 없다.
+nodeSelector:
+  workload-class: system
 tolerations:
   - key: CriticalAddonsOnly
     operator: Equal
