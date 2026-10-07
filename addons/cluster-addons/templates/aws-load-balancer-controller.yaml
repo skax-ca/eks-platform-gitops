@@ -37,6 +37,11 @@ spec:
           #    ⚠️ 태그를 여러 개 주면 AND 필터다. Name 하나로 유일성이 성립한다.
           - name: vpcTags.Name
             value: {{ required "cluster.vpcName 이 비었다(cluster Secret vpcName 라벨)" .Values.cluster.vpcName }}
+          # 웹훅 TLS 를 cert-manager 에 맡길지. 티어로 승격하는 스위치다(values.yaml 의 awsLbcCertManager).
+          #    켜면 차트가 Secret 을 렌더하지 않고 Certificate·Issuer 를 만들며, 웹훅의 caBundle 은
+          #    cert-manager 의 cainjector 가 넣는다. 아래 ignoreDifferences 의 caBundle 항목이 그 값을 지킨다.
+          - name: enableCertManager
+            value: {{ include "cluster-addons.staged" (list . "awsLbcCertManager") | quote }}
         valueFiles:
           - $values/addons/aws-load-balancer-controller/values.yaml
     - repoURL: {{ .Values.gitops.repoURL }}
