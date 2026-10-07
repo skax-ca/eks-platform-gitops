@@ -396,9 +396,11 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
     ```
   - 인증서 유효 기간은 차트가 정한 3650일이고 갱신하는 것이 없다. 그보다 오래 두는 클러스터는 위
     절차로 다시 만든다.
-  - ⏳ `RespectIgnoreDifferences`가 `caBundle`의 배열 경로(`.webhooks[]?.clientConfig.caBundle`)에도
-    걸리는지는 살아 있는 클러스터에서 확인한다. `aws-lbc`를 hard refresh한 뒤 Secret의
-    `metadata.managedFields[*].time`이 그대로면 걸린 것이다.
+  - 확인하는 법: `aws-lbc`를 hard refresh하거나 `argocd app sync`로 다시 돌린 뒤에도 Secret과 웹훅 설정
+    2개의 `metadata.resourceVersion`이 그대로면 유지되고 있는 것이다. 웹훅이 지금 통과시키는지는
+    `kubectl -n default create service clusterip tls-probe --tcp=80:80 --dry-run=server`로 본다.
+  - ⚠️ 이 설정을 이미 선 클러스터에 넣는 순간에는 한 번 더 다시 쓰일 수 있다. `aws-lbc`가 새 커밋을
+    읽는 것이 부모가 새 spec을 넣는 것보다 빠르면 옛 spec으로 sync한다.
 
 ---
 
