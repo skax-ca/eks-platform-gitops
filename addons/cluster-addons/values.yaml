@@ -37,9 +37,13 @@ versions:
   #    없으면 차트의 Certificate·Issuer 가 CRD 없음으로 거부돼 aws-lbc 가 sync 에 실패한다.
   # ⚠️ 따옴표를 떼지 않는다. YAML 불리언 false 는 staged 헬퍼의 required 가 빈 값으로 본다.
   # 두 줄이 "true" 로 같아지면 이 표에서 빼고 addons/aws-load-balancer-controller/values.yaml 로 옮긴다.
+  # ⛔ 켜기 전에 control plane 이 cert-manager webhook 에 닿는지 본다. EKS addon 의 webhook 은
+  #    10260 포트로 듣는데 노드 SG 가 그 포트를 control plane 에 열지 않으면 Certificate·Issuer 생성이
+  #    `failed calling webhook "webhook.cert-manager.io"` 로 거부된다. 그 사이 Argo CD 가 기존 Secret 을
+  #    prune 하고 웹훅의 caBundle 을 비워 그 클러스터의 Service 생성·수정이 전부 막힌다.
   awsLbcCertManager:
     prd: "false"
-    nonprd: "true"
+    nonprd: "false"
   # 🔑 OCI 태그가 곧 chart 버전이다. GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
   #    호환성 매트릭스는 클러스터 1.35에 >= 1.9 를 요구한다.
   karpenter:
