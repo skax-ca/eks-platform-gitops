@@ -37,11 +37,6 @@ spec:
           #    ⚠️ 태그를 여러 개 주면 AND 필터다. Name 하나로 유일성이 성립한다.
           - name: vpcTags.Name
             value: {{ required "cluster.vpcName 이 비었다(cluster Secret vpcName 라벨)" .Values.cluster.vpcName }}
-          # 웹훅 TLS 를 cert-manager 에 맡길지. 티어로 승격하는 스위치다(values.yaml 의 awsLbcCertManager).
-          #    켜면 차트가 Secret 을 렌더하지 않고 Certificate·Issuer 를 만들며, 웹훅의 caBundle 은
-          #    cert-manager 의 cainjector 가 넣는다. 아래 ignoreDifferences 의 caBundle 항목이 그 값을 지킨다.
-          - name: enableCertManager
-            value: {{ include "cluster-addons.staged" (list . "awsLbcCertManager") | quote }}
         valueFiles:
           - $values/addons/aws-load-balancer-controller/values.yaml
     - repoURL: {{ .Values.gitops.repoURL }}
@@ -59,6 +54,8 @@ spec:
       - ServerSideApply=true
       # 아래 ignoreDifferences 와 짝이다. 이것이 없으면 diff 만 숨고 sync 는 여전히 덮어쓴다.
       - RespectIgnoreDifferences=true
+  # 아래는 차트의 enableCertManager 를 끈 클러스터를 위한 것이다. 켜져 있으면(values 파일의 기본) 차트가
+  #    Secret 과 caBundle 을 렌더하지 않아 이 항목들은 걸리는 대상이 없다. 끄는 순간부터 필요하므로 둔다.
   # 🔑 웹훅 TLS 는 처음 만들어진 것을 그대로 둔다. 차트가 렌더할 때마다 CA 와 인증서를 새로
   #    만들어(genCA), 이것이 없으면 Argo CD 가 렌더가 바뀔 때마다 Secret 과 웹훅 caBundle 을 다시
   #    쓴다. 파드가 새 Secret 을 읽기 전까지 caBundle 과 파드 인증서가 어긋나고, 그동안 이 웹훅을

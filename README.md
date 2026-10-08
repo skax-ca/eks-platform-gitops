@@ -383,11 +383,11 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
   않는다. 이것이 없으면 다시 쓸 때마다 웹훅 CA와 파드 인증서가 잠깐 어긋나고, 그동안 그 클러스터의
   Service 생성·수정이 `x509: certificate signed by unknown authority`로 거부된다(같은 wave의 `kyverno`
   sync가 재시도로 몇 분 늦어지는 것이 대표 증상이다).
-  - 지금은 양 티어 모두 차트의 `enableCertManager`가 켜져 있다(버전 표의 `awsLbcCertManager`). 차트가
-    Secret을 렌더하지 않고 cert-manager가 발급·갱신하며 `caBundle`은 cainjector가 넣는다. 위의 유지
-    방식과 아래 `x509` 복구는 스위치를 끈 클러스터에 해당한다. ⏳ 처음부터 켠 채로 서는 경로와,
-    cainjector가 넣은 `caBundle`을 Argo CD가 diff로 보는지는 구축에서 확인한다.
-  - ⚠️ ALBC와 kyverno는 같은 wave 1이다. ALBC 파드가 뜨기 전에 kyverno의 Service가 먼저 닿으면
+  - 차트의 `enableCertManager`가 켜져 있다(`addons/aws-load-balancer-controller/values.yaml`). 차트가
+    Secret을 렌더하지 않고 cert-manager가 발급·갱신하며 `caBundle`은 cainjector가 넣는다. 그 필드의
+    소유자가 cainjector라 Argo CD는 diff로 보지 않는다. 위의 유지 방식과 아래 `x509` 복구는 스위치를
+    끈 클러스터에 해당한다.
+  - ⚠️ ALBC와 kyverno·keda는 같은 wave 1이다. ALBC 파드가 뜨기 전에 그 addon의 Service가 먼저 닿으면
     `no endpoints available for service "aws-load-balancer-webhook-service"`로 한 번 재시도한다.
     위 설정이 막는 것은 `x509` 쪽이고 이 경합은 남는다.
   - 다른 addon의 sync가 `x509`로 계속 재시도하면 Secret과 `caBundle`이 서로 다른 렌더에서 굳은

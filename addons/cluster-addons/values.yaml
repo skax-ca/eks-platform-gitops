@@ -32,22 +32,6 @@ versions:
   awsLoadBalancerController:
     prd: 3.5.0
     nonprd: 3.5.0
-  # 버전이 아니라 스위치다. ALBC 웹훅 TLS 를 cert-manager 가 발급하게 할지를 티어로 승격한다.
-  #    "true" 인 티어의 클러스터에는 cert-manager addon 이 먼저 서 있어야 한다(배포 루트 소관).
-  #    없으면 차트의 Certificate·Issuer 가 CRD 없음으로 거부돼 aws-lbc 가 sync 에 실패한다.
-  # ⚠️ 따옴표를 떼지 않는다. YAML 불리언 false 는 staged 헬퍼의 required 가 빈 값으로 본다.
-  # ⛔ 이미 선 클러스터에서 "false" → "true" 로 바꾸지 않는다. Argo CD 가 한 sync 안에서 기존 Secret 을
-  #    prune 하고 웹훅을 caBundle 없는 렌더로 덮어써, Certificate 가 발급될 때까지 그 클러스터의 Service
-  #    생성·수정이 막힌다. Certificate 생성이 실패하면 복구할 때까지 막힌 채로 남는다. 클러스터가 없는
-  #    상태에서 바꾸고 구축 때 처음부터 이 값으로 선다.
-  # ⛔ 켠 채로 구축하기 전에 control plane 이 cert-manager webhook 에 닿는지 본다. EKS addon 의 webhook 은
-  #    10260 포트로 듣고, 노드 SG 가 그 포트를 열지 않으면 Certificate·Issuer 생성이
-  #    `failed calling webhook "webhook.cert-manager.io"` 로 거부된다. eks-cluster 모듈이 cert-manager 를
-  #    실은 루트에 그 포트를 연다. 확인: Issuer 하나를 `kubectl apply --dry-run=server` 로 보낸다.
-  # 두 티어가 구축에서 검증되면 이 표에서 빼고 addons/aws-load-balancer-controller/values.yaml 로 옮긴다.
-  awsLbcCertManager:
-    prd: "true"
-    nonprd: "true"
   # 🔑 OCI 태그가 곧 chart 버전이다. GitHub 릴리스 태그를 보면 "태그≠Chart.yaml" 함정에 걸린다.
   #    호환성 매트릭스는 클러스터 1.35에 >= 1.9 를 요구한다.
   karpenter:
