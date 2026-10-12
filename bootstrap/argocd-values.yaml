@@ -9,17 +9,72 @@
 #
 # 설계: iac-module-library의 docs/architectures/gitops-hub-spoke/aws/
 
-# system 노드그룹의 CriticalAddonsOnly=true:NoSchedule taint 를 전 컴포넌트가 넘게 한다.
-#   ⚠️ 차트 기본값은 tolerations 가 전부 비어 있어 이 taint 를 모른다. 컴포넌트별 tolerations 키가
-#      전부 global.tolerations 로 떨어지므로 여기 하나면 전체에 적용된다.
-#   ⚠️ 고정이 아니라 허용이다. nodeSelector 를 주지 않으므로 Karpenter 노드가 생긴 뒤에는 어느
-#      쪽에 있어도 된다.
+# 전 컴포넌트를 system 노드그룹에 고정한다. tolerations 로 CriticalAddonsOnly taint 를 넘고 nodeSelector 로
+#    그 노드만 고른다. 한 축만 걸면 고정이 아니다(eks-reference-infra `docs/runbooks.md` 「노드 배치」).
+#   고정하는 이유: 이 ArgoCD 가 등록된 전 클러스터를 reconcile 한다. Karpenter 노드에 서면 drift·
+#      consolidation 으로 노드가 교체될 때마다 재시작하고, 그 시점을 우리가 고르지 못한다. system
+#      노드그룹은 값을 올리는 커밋으로만 교체된다.
+#   ⚠️ 차트 기본값은 tolerations 가 전부 비어 있다. 컴포넌트별 키가 global 로 떨어지므로 여기 하나면
+#      argo-cd 차트의 전 컴포넌트에 적용된다. nodeSelector 는 차트 기본값(kubernetes.io/os: linux)에
+#      병합된다.
+#   ⛔ redis-ha 는 서브차트라 global 이 닿지 않는다. 아래 redis-ha 블록에 같은 값을 다시 적는다.
 global:
+  nodeSelector:
+    workload-class: system
   tolerations:
     - key: CriticalAddonsOnly
       operator: Equal
       value: "true"
       effect: NoSchedule
+
+# ── 고가용성 ─────────────────────────────────────────────────────────────────
+# 차트 README 「High Availability」의 "HA mode without autoscaling" 값이다. hub 의 ArgoCD 하나가 전
+#    spoke 의 pull 을 맡으므로 노드 한 대의 교체가 UI·API·매니페스트 렌더를 멈추지 않게 한다.
+# ⛔ system 노드가 3대 이상이어야 한다. redis-ha 의 redis 3개와 haproxy 3개가 각각 서로 다른 노드를
+#    요구한다(hardAntiAffinity). 2대면 세 번째 파드가 Pending 으로 남고 seed 의 helm install 이
+#    끝나지 않는다. 노드 수는 eks-reference-infra 의 live/hub/eks/main.tf 가 정한다.
+# controller.replicas 는 1 이다(차트 기본, HA 예시도 1). 복제본을 늘리는 것은 클러스터를 나눠 맡는
+#    sharding 이고 대기 복제본이 아니다. controller 가 재시작하는 동안 reconcile 이 멈추고, desired
+#    state 는 Git 에 그대로 있다.
+# autoscaling 을 쓰지 않는 이유: 이 규모에서 server·repo-server 의 부하가 복제본 수를 움직일 만큼
+#    변하지 않는다. 고정 2개가 읽기 쉽다.
+redis-ha:
+  enabled: true
+  nodeSelector:
+    workload-class: system
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  # 노드 교체가 redis 를 한 번에 하나만 내리게 한다. 셋 중 둘이 남아야 sentinel 이 master 를 고른다.
+  podDisruptionBudget:
+    maxUnavailable: 1
+  haproxy:
+    podDisruptionBudget:
+      maxUnavailable: 1
+
+# PDB 는 차트의 HA 예시에 없고 이 저장소가 더한다. 복제본이 2개여도 PDB 가 없으면 노드 교체가 둘을
+#    함께 비울 수 있다.
+# ⛔ controller 에는 PDB 를 두지 않는다. 복제본이 하나라 PDB 가 eviction 을 전부 막고, 관리형
+#    노드그룹의 교체가 15분 뒤 PodEvictionFailure 로 실패한다.
+server:
+  replicas: 2
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+
+repoServer:
+  replicas: 2
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+
+applicationSet:
+  replicas: 2
+  pdb:
+    enabled: true
+    maxUnavailable: 1
 
 # dex 를 끈다. OIDC 직결이면 불필요하고, 켜 두면 쓰지 않는 파드가 하나 도는 죽은 경로가 된다.
 #   ⚠️ dex 를 경유해야 하는 IdP(SAML-only 등)를 쓰게 되면 그때 다시 켠다.
@@ -81,11 +136,6 @@ configs:
 # server.service.type: ClusterIP
 #   노출을 만들지 않는다. 사람은 workbench 경유 port-forward 로 닿는다.
 #   ⛔ internal ALB + Ingress 는 ACM·Route53·global.domain·SG 가 새로 필요하고 고객사마다 다르다.
-#
-# redis-ha.enabled: false · 각 컴포넌트 replicas: 1
-#   현재 유일한 실증 환경이 dev 단일 클러스터다.
-#   HA 가 필요해지면 redis-ha.enabled 와 replicas 를 소비자 값으로 켠다.
-#   ⚠️ hub SPOF 의 비용은 "복구까지 pull 이 멈춘다"이고, desired state 는 Git 에 그대로 있다.
 #
 # crds.install: true · crds.keep: true
 #   ⚠️ uninstall 해도 CRD 가 남는다. 관리형 addon 의 delete_propagation_policy=RETAIN 과 같은
