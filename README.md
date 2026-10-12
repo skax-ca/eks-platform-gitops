@@ -180,10 +180,10 @@ Application이 직접 읽으므로 부모를 거치지 않는다.
 
 승인된 버전은 이 표에만 있다. 템플릿은 `tier`로 줄을 고를 뿐 버전을 적지 않는다.
 
-- **staged**(ALBC · Karpenter · Kyverno 엔진·정책 · Gateway API CRD): `versions.<addon>`에 `prd`·`nonprd`
+- **staged**(ALBC · Karpenter · Kyverno 엔진·정책 · Gateway API CRD · cluster-autoscaler): `versions.<addon>`에 `prd`·`nonprd`
   두 줄을 나란히 둔다. 두 값이 다르면 승격이 진행 중이고, 같으면 끝난 것이다. `nonprd`를 먼저 올려
   비운영 클러스터에서 확인하고 `prd`를 같은 값으로 올린다.
-- **opt-in**(KEDA · cluster-autoscaler): 한 줄이다. 구독한 클러스터가 함께 올라간다.
+- **opt-in**(KEDA): 한 줄이다. 구독한 클러스터가 함께 올라간다.
 - **uniform**(이 저장소의 로컬 차트·정책): 표에 없다. `main`을 따라간다.
 
 ⚠️ `tier`가 `prd`·`nonprd`가 아니면 부모 차트가 `required`로 렌더를 실패시켜 그 클러스터의 부모가
@@ -293,7 +293,7 @@ ApplicationSet `cluster-addons`가 부모 차트에 넘기는 라벨이다.
 | `tier` | 버전 표의 줄 선택 · NodePool 차트의 AMI 핀 선택 | `prd` \| `nonprd` | 부모 렌더가 `required`로 실패한다 |
 | `vpcName` | ALBC의 `vpcTags.Name` | VPC의 Name 태그 | 부모 렌더가 `required`로 실패한다 |
 | `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름(`iamr-<workload>-<env>-<region>-karpenter-node`). `eks-cluster` 모듈이 접두 모드를 끄고 고정 이름으로 만들어 재구축해도 같다 | 부모 렌더가 `required`로 실패한다 |
-| `addon-<name>: enabled` | opt-in addon 구독 | `addon-keda` · `addon-cluster-autoscaler` | 그 addon만 빠진다. 오류가 보고되지 않는다 |
+| `addon-<name>: enabled` | opt-in addon 구독 | `addon-keda` | 그 addon만 빠진다. 오류가 보고되지 않는다 |
 
 ⚠️ **teardown은 `environment` 라벨을 먼저 떼고, 부모가 hub에서 사라진 뒤 Secret을 지운다.** 라벨을
 떼면 부모가 지워지면서 addon을 wave 역순(CR → 컨트롤러 → CRD)으로 지운다. Secret을 먼저 지우면
@@ -337,8 +337,10 @@ Namespace는 AppProject `clusterResourceWhitelist`의 검사 대상이므로 `{g
 Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer-controller`는 Terraform
 기본값이 `false`인데도 baseline이다.
 
-- **baseline**(ALBC·Karpenter·Kyverno·Gateway API): 전 클러스터에 배포.
-- **opt-in**(KEDA·cluster-autoscaler): 특정 아키텍처를 선택한 클러스터만 `addon-<name>: enabled`
+- **baseline**(ALBC·Karpenter·Kyverno·Gateway API·cluster-autoscaler): 전 클러스터에 배포.
+  cluster-autoscaler가 baseline인 이유는 system 노드그룹이 이 패턴의 모든 클러스터에 있어서다.
+  ⛔ Terraform 쪽 `enable_cluster_autoscaler`가 꺼진 클러스터를 등록하면 권한 없는 컨트롤러가 뜬다.
+- **opt-in**(KEDA): 특정 아키텍처를 선택한 클러스터만 `addon-<name>: enabled`
   라벨로 구독.
 
 | addon | chart | 버전 | namespace | wave | 배포 방식 |
@@ -349,7 +351,7 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
 | `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.1 | `kube-system` | 1 | baseline |
 | `kyverno` | `kyverno.github.io/kyverno` | 3.9.1 | `kyverno` | 1 | baseline, `CreateNamespace=true` |
 | `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | 1 | opt-in(cluster Secret 라벨 `addon-keda: enabled`) |
-| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0 | `kube-system` | 1 | opt-in(cluster Secret 라벨 `addon-cluster-autoscaler: enabled`) — dev 구독 중(taint 분리 검증 완료) |
+| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0(이미지 v1.35.0) | `kube-system` | 1 | baseline. 이미지 태그가 티어별로 클러스터의 k8s 마이너를 따라간다 |
 | `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | 2 | baseline |
 | `gateway`(GatewayClass·LoadBalancerConfiguration·Gateway) | 로컬 차트(`addons/gateway/shared-gateway/`) | — | `gateway-system` | 2 | baseline, `CreateNamespace=true`. HTTPRoute·백엔드는 앱팀 저장소 소관(범위 밖) |
 | `kyverno-policies` · 커스텀 정책 | `kyverno.github.io/kyverno` · `addons/kyverno/custom-policies/` | 3.9.1 · — | `kyverno` | 2 | baseline |
