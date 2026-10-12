@@ -33,6 +33,25 @@ limits:
 disruption:
   consolidationPolicy: WhenEmptyOrUnderutilized
   consolidateAfter: 30s
+  # 한 번에 자발적으로 비울 수 있는 노드의 비율. Karpenter 기본값과 같은 값을 명시로 둔다. budgets 를
+  # 하나라도 적으면 기본 budget 이 사라지므로, 아래 drift 보류 줄만 두면 나머지 사유가 무제한이 된다.
+  # 퍼센트는 올림이라 노드 10대 이하에서는 한 번에 1대다.
+  budgetNodes: "10%"
+
+# 티어별 drift 보류. true 인 티어의 NodePool 은 drift 로 판정된 노드를 교체하지 않는다(budget 0).
+#
+# EKS 마이너 업그레이드에 쓴다. 아래 amiAliasByTier 의 alias 는 컨트롤플레인 버전에 맞는 AMI 로
+# 풀리므로, 컨트롤플레인이 올라가면 alias 를 고치지 않아도 Karpenter 가 기존 노드를 drift 로 보고
+# 교체한다. app 워크로드가 이 노드에 있어, 컨트롤플레인과 system 노드그룹을 확인할 때까지 그 교체를
+# 미룬다. 절차는 eks-reference-infra `docs/upgrade.md` 가 갖는다.
+#
+# ⚠️ 막는 것은 drift 사유의 교체뿐이다. 스케일 아웃이나 consolidation 으로 새로 뜨는 노드는 새
+#    마이너로 뜬다.
+# ⚠️ true 인 동안에는 amiAliasByTier 를 올려도 그 티어의 노드가 교체되지 않는다. AMI 승격도 drift 다.
+# ⛔ true 인 채로 두지 않는다. 낡은 AMI 의 노드가 조용히 남는다. 두 줄이 false 인 것이 평소 상태다.
+driftHoldByTier:
+  prd: false
+  nonprd: false
 
 # AL2023 AMI. 값은 `<family>@<버전>` 이고 AL2023 의 버전은 날짜다 — `al2023@v20240703` 처럼 쓴다.
 # `@latest` 는 Karpenter 가 최신을 추적한다는 뜻이라, 새 AMI 가 릴리스되면 낡은 노드를 전부 교체한다.

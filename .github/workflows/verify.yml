@@ -115,6 +115,13 @@ jobs:
             helm lint addons/karpenter/nodepool --set clusterName=eks-x,nodeRole=role-x,tier="$tier" --quiet
             helm template t addons/karpenter/nodepool --set clusterName=eks-x,nodeRole=role-x,tier="$tier" >/dev/null
           done
+          # drift 보류는 켠 티어에만 걸려야 한다. 반대 티어까지 걸리면 승격 순서가 사라진다.
+          hold="clusterName=eks-x,nodeRole=role-x,driftHoldByTier.nonprd=true"
+          helm template t addons/karpenter/nodepool --set "$hold,tier=nonprd" | grep -q 'Drifted' \
+            || { echo "driftHoldByTier.nonprd=true 인데 nonprd 렌더에 보류가 없다"; exit 1; }
+          if helm template t addons/karpenter/nodepool --set "$hold,tier=prd" | grep -q 'Drifted'; then
+            echo "driftHoldByTier.nonprd=true 가 prd 렌더에 보류를 걸었다"; exit 1
+          fi
           helm lint addons/gateway/shared-gateway --set environment=dev --quiet
           helm template t addons/gateway/shared-gateway --set environment=dev >/dev/null
           base=cluster.name=eks-x,cluster.server=https://x,cluster.environment=dev,cluster.vpcName=vpc-x,cluster.karpenterNodeRole=role-x
