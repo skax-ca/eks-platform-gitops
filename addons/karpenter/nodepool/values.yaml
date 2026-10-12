@@ -51,7 +51,7 @@ disruption:
 # ⛔ true 인 채로 두지 않는다. 낡은 AMI 의 노드가 조용히 남는다. 두 줄이 false 인 것이 평소 상태다.
 driftHoldByTier:
   prd: false
-  nonprd: false
+  nonprd: true
 
 # AL2023 AMI. 값은 `<family>@<버전>` 이고 AL2023 의 버전은 날짜다 — `al2023@v20240703` 처럼 쓴다.
 # `@latest` 는 Karpenter 가 최신을 추적한다는 뜻이라, 새 AMI 가 릴리스되면 낡은 노드를 전부 교체한다.
