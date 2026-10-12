@@ -68,8 +68,6 @@ spec:
               value: '{{ index .metadata.labels "karpenterNodeRole" }}'
             - name: addons.keda
               value: '{{ index .metadata.labels "addon-keda" }}'
-            - name: addons.clusterAutoscaler
-              value: '{{ index .metadata.labels "addon-cluster-autoscaler" }}'
       # 부모는 hub 의 argocd 네임스페이스에 addon Application 을 만든다. addon 이 도는 곳은 각 addon
       #    Application 의 destination 이다.
       destination:

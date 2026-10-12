@@ -15,7 +15,6 @@ cluster:
 # opt-in 구독. cluster Secret 의 addon-<name> 라벨 값이 그대로 온다. enabled 일 때만 렌더한다.
 addons:
   keda: ""
-  clusterAutoscaler: ""
 
 # 🔑 버전 표. 승인된 버전은 이 표에만 있다. 템플릿은 tier 로 줄을 고를 뿐 버전을 적지 않는다.
 #
@@ -52,9 +51,19 @@ versions:
     nonprd: 3.9.1
   # ⚠️ 이 차트는 kubeVersion 제약(>= 1.23)이 있다. 올릴 때 확인한다.
   keda: 2.20.2
-  # appVersion 이 클러스터 k8s 마이너와 일치하는 것을 고른다. cross-version 은 상류가 테스트하지
-  #    않는다. k8s 를 올릴 때 이 값도 함께 올린다.
-  clusterAutoscaler: 9.59.0
+  # 🔑 cluster-autoscaler 는 두 줄을 짝으로 읽는다. 차트 버전과 이미지 태그다.
+  #    이미지의 마이너는 그 티어 클러스터의 k8s 마이너와 같아야 한다. 스케줄러와 묶여 있어 상류가
+  #    마이너가 다른 조합을 테스트하지 않는다. 클러스터를 올릴 때 그 티어의 이미지 줄을 함께 올린다.
+  # 이미지를 차트와 따로 적는 이유: 차트가 k8s 마이너마다 나오지 않는다. 새 마이너의 이미지가 먼저
+  #    나오고 차트 appVersion 은 뒤따라온다.
+  # ⚠️ 이미지만 올린 구간에는 차트의 RBAC 가 옛 마이너 기준이다. 올린 뒤 컨트롤러 로그에 forbidden 이
+  #    없는지 본다. 있으면 차트 줄도 함께 올린다.
+  clusterAutoscaler:
+    prd: 9.59.0
+    nonprd: 9.59.0
+  clusterAutoscalerImage:
+    prd: v1.35.0
+    nonprd: v1.35.0
 
 # addon Application 이 values 파일과 로컬 차트를 읽는 저장소. ⚠️ projects/platform.yaml 의
 #    sourceRepos 에 있어야 한다.

@@ -127,7 +127,7 @@ jobs:
           base=cluster.name=eks-x,cluster.server=https://x,cluster.environment=dev,cluster.vpcName=vpc-x,cluster.karpenterNodeRole=role-x
           for tier in prd nonprd; do
             for sub in "" enabled; do
-              set_="$base,cluster.tier=$tier,addons.keda=$sub,addons.clusterAutoscaler=$sub"
+              set_="$base,cluster.tier=$tier,addons.keda=$sub"
               helm lint addons/cluster-addons --set "$set_" --quiet
               helm template t addons/cluster-addons --set "$set_" >/dev/null
             done
