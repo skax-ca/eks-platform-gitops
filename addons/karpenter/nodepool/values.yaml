@@ -46,16 +46,50 @@ instanceGenerationGt: "2"
 limits:
   cpu: "100"
 
-disruption:
-  consolidationPolicy: WhenEmptyOrUnderutilized
-  consolidateAfter: 30s
-  # 한 번에 자발적으로 비울 수 있는 노드의 비율. Karpenter 기본값과 같은 값을 명시로 둔다. budgets 를
-  # 하나라도 적으면 기본 budget 이 사라지므로, 아래 업그레이드 보류 줄만 두면 나머지 사유가 무제한이 된다.
-  # 퍼센트는 올림이라 노드 10대 이하에서는 한 번에 1대다.
-  budgetNodes: "10%"
+# 티어별 disruption. Karpenter 가 평소에 떠 있는 노드를 얼마나 건드리는지를 정한다.
+#
+# 🔑 이 맵은 승격 대상이 아니다. amiAliasByTier 와 부모 차트의 버전 표는 두 줄이 같은 것이 정상이고
+#    다르면 승격이 진행 중이다. 이 맵은 두 줄이 다른 것이 정상이고 그 상태로 계속 간다. 운영과 비운영이
+#    노드 교체를 받아들이는 정도가 달라서다.
+#
+# nonprd: 비용이 먼저다. 덜 쓰이는 노드를 30초 뒤부터 합치고 더 싼 구성으로 바꾼다.
+# prd: 합치기는 유지하되 조용한 시간에만 한다.
+#   · consolidateAfter 10m: 파드가 오르내릴 때마다 타이머가 다시 돈다. 짧으면 배포 직후의 일시적인
+#     빈자리를 보고 노드를 합쳤다가 곧 다시 늘린다.
+#   · 평일 업무 시간에는 Underutilized 를 막는다. 빈 노드 정리(Empty)와 drift 교체는 막지 않는다.
+#     AMI 승격이 업무 시간에 걸리는 것을 막으려면 그 줄의 reasons 에 Drifted 를 더한다.
+#   ⚠️ schedule 은 UTC 만 받는다. "0 0 * * mon-fri" + 10h 는 KST 평일 09~19시다. 시작을 KST 09시보다
+#      앞으로 당기면 UTC 로는 전날이 되어 요일 식도 함께 바꿔야 한다.
+# ⛔ prd 를 WhenEmpty 로 바꾸지 않는다. 파드가 하나라도 남은 노드는 합쳐지지 않아 워크로드가 줄어도
+#    노드가 남는다. 업무 시간에 노드를 건드리지 않는 것은 위 schedule 이 이미 한다.
+#
+# budgets 의 첫 줄(10%)은 Karpenter 기본값과 같은 값을 명시로 둔 것이다. budgets 를 하나라도 적으면
+# 기본 budget 이 사라지므로, 이 줄이 없으면 나머지 사유가 무제한이 된다. 퍼센트는 올림이라 노드 10대
+# 이하에서는 한 번에 1대다. Karpenter 는 걸린 budget 중 가장 좁은 것을 따른다.
+#
+# ⚠️ 이 블록은 노드 템플릿이 아니다. 값을 바꿔도 떠 있는 노드가 교체되지 않고 이후의 판단에만 걸린다.
+# ⚠️ 만료(expireAfter, Karpenter 기본 720h)는 budget 이 막지 못한다. 30일이 지난 노드는 시간과 무관하게
+#    교체된다.
+disruptionByTier:
+  prd:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 10m
+    budgets:
+      - nodes: "10%"
+      - nodes: "0"
+        reasons:
+          - Underutilized
+        schedule: "0 0 * * mon-fri"
+        duration: 10h
+  nonprd:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s
+    budgets:
+      - nodes: "10%"
 
 # 티어별 업그레이드 보류. true 인 티어의 NodePool 은 떠 있는 노드를 스스로 갈아 끼우지 않는다. drift 로
 # 판정된 노드의 교체와, 더 싼 구성을 찾아 노드를 바꾸거나 합치는 consolidation 을 함께 막는다(budget 0).
+# 위 disruptionByTier 의 budgets 뒤에 한 줄로 더해진다.
 #
 # EKS 마이너 업그레이드에 쓴다. 아래 amiAliasByTier 의 alias 는 컨트롤플레인 버전에 맞는 AMI 로
 # 풀리므로, 컨트롤플레인이 올라가면 alias 를 고치지 않아도 Karpenter 가 기존 노드를 drift 로 보고
