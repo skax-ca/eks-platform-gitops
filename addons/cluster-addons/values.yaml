@@ -62,7 +62,7 @@ versions:
     prd: 9.59.0
     nonprd: 9.59.0
   clusterAutoscalerImage:
-    prd: v1.35.0
+    prd: v1.36.1
     nonprd: v1.36.1
 
 # addon Application 이 values 파일과 로컬 차트를 읽는 저장소. ⚠️ projects/platform.yaml 의
