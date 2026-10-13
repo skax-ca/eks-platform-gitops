@@ -1,7 +1,7 @@
 {{- $tier := required "tier 가 비어 있다 — cluster Secret 의 tier 라벨에서 온다" .Values.tier -}}
 {{- /* false 도 유효한 값이라 required 로 읽지 않는다. 키가 없는 것만 실패시킨다. */ -}}
-{{- if not (hasKey .Values.driftHoldByTier $tier) -}}
-{{- fail (printf "driftHoldByTier 에 tier %q 항목이 없다 — values.yaml 에 그 티어를 추가한다" $tier) -}}
+{{- if not (hasKey .Values.upgradeHoldByTier $tier) -}}
+{{- fail (printf "upgradeHoldByTier 에 tier %q 항목이 없다 — values.yaml 에 그 티어를 추가한다" $tier) -}}
 {{- end -}}
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -41,11 +41,12 @@ spec:
     consolidationPolicy: {{ .Values.disruption.consolidationPolicy }}
     consolidateAfter: {{ .Values.disruption.consolidateAfter }}
     # 여러 budget 이 걸리면 Karpenter 는 가장 좁은 것을 따른다. 첫 줄은 모든 사유에 걸리고, 보류 줄은
-    # drift 에만 0 을 건다.
+    # drift 와 consolidation 에 0 을 건다. Empty 는 사유에 넣지 않아 빈 노드는 계속 치워진다.
     budgets:
       - nodes: {{ .Values.disruption.budgetNodes | quote }}
-      {{- if index .Values.driftHoldByTier $tier }}
+      {{- if index .Values.upgradeHoldByTier $tier }}
       - nodes: "0"
         reasons:
           - Drifted
+          - Underutilized
       {{- end }}
