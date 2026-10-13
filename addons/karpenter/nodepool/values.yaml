@@ -105,7 +105,7 @@ disruptionByTier:
 # ⛔ true 인 채로 두지 않는다. 낡은 AMI 의 노드가 조용히 남고 노드가 합쳐지지 않아 비용이 쌓인다. 두
 #    줄이 false 인 것이 평소 상태다.
 upgradeHoldByTier:
-  prd: true
+  prd: false
   nonprd: false
 
 # AL2023 AMI. 값은 `<family>@<버전>` 이고 AL2023 의 버전은 날짜다 — `al2023@v20240703` 처럼 쓴다.
