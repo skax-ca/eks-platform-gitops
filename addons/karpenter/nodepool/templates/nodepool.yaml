@@ -24,7 +24,7 @@ spec:
           values: ["linux"]
         - key: karpenter.sh/capacity-type
           operator: In
-          values: {{ toYaml .Values.capacityTypes | nindent 12 }}
+          values: {{ toYaml (required (printf "capacityTypesByTier 에 tier %q 항목이 없다 — values.yaml 에 그 티어를 추가한다" .Values.tier) (index .Values.capacityTypesByTier .Values.tier)) | nindent 12 }}
         - key: karpenter.k8s.aws/instance-category
           operator: In
           values: {{ toYaml .Values.instanceCategories | nindent 12 }}

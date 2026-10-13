@@ -290,7 +290,7 @@ ApplicationSet `cluster-addons`가 부모 차트에 넘기는 라벨이다.
 | 라벨 | 읽는 쪽 | 값 | 빠지면 |
 |---|---|---|---|
 | `environment` | 부모 생성(존재) · `gateway` 차트의 ALB 이름·태그(값) | `hub` · `dev` 등 | 부모가 생기지 않는다. 오류가 보고되지 않는다 |
-| `tier` | 버전 표의 줄 선택 · NodePool 차트의 AMI 핀과 업그레이드 보류 선택 | `prd` \| `nonprd` | 부모 렌더가 `required`로 실패한다 |
+| `tier` | 버전 표의 줄 선택 · NodePool 차트의 capacity type·AMI 핀과 업그레이드 보류 선택 | `prd` \| `nonprd` | 부모 렌더가 `required`로 실패한다 |
 | `vpcName` | ALBC의 `vpcTags.Name` | VPC의 Name 태그 | 부모 렌더가 `required`로 실패한다 |
 | `karpenterNodeRole` | NodePool 차트의 EC2NodeClass | 노드 IAM role 이름(`iamr-<workload>-<env>-<region>-karpenter-node`). `eks-cluster` 모듈이 접두 모드를 끄고 고정 이름으로 만들어 재구축해도 같다 | 부모 렌더가 `required`로 실패한다 |
 | `addon-<name>: enabled` | opt-in addon 구독 | `addon-keda` | 그 addon만 빠진다. 오류가 보고되지 않는다 |
