@@ -12,14 +12,26 @@ tier: ""
 architectures:
   - arm64
 
-# on-demand 만 쓴다. spot 은 AWS 가 회수하는 시점을 우리가 고르지 못하고, Karpenter 가 더 싼 spot 이
-# 생기면 떠 있는 노드를 그쪽으로 갈아 끼운다. 노드가 바뀌는 시점을 커밋으로만 정하려는 것이다.
-# ⚠️ 이 값만으로 노드 교체가 멈추지는 않는다. consolidation 은 on-demand 노드도 더 싼 타입으로
-#    바꾼다. 그것을 정하는 것은 아래 disruption 블록이다.
-# spot 을 되살리려면 목록 앞에 spot 을 더한다. 중단 알림은 Terraform 이 만든 SQS 를 컨트롤러가 소비해
-#    graceful 처리하고, 그 배선은 capacityTypes 와 무관하게 남아 있다.
-capacityTypes:
-  - on-demand
+# 티어별 capacity type. 목록에 spot 이 있으면 Karpenter 는 spot 을 먼저 쓰고 없을 때 on-demand 로 간다.
+#
+# 🔑 이 맵은 승격 대상이 아니다. 두 줄이 다른 것이 정상이고 그 상태로 계속 간다.
+#
+# prd: on-demand 만 쓴다. spot 은 AWS 가 회수하는 시점을 우리가 고르지 못한다. 회수 알림이 오면
+#    Karpenter 가 대체 노드를 띄우고 기존 노드를 비우는데, 그 시각이 업무 시간이든 업그레이드 도중이든
+#    가리지 않는다.
+# nonprd: spot 을 먼저 쓴다. 비용이 먼저이고 노드가 바뀌어도 영향이 작다. 중단 알림은 Terraform 이 만든
+#    SQS 를 컨트롤러가 소비해 graceful 처리한다.
+#
+# ⚠️ 이 값은 노드 템플릿의 일부다. 바꾸면 그 티어에 떠 있는 노드 중 새 조건에 맞지 않는 것이 drift 로
+#    판정되어 교체된다. disruptionByTier 를 바꿀 때와 다르다.
+# ⚠️ spot 을 뺀다고 노드 교체가 멈추지는 않는다. consolidation 은 on-demand 노드도 더 싼 타입으로
+#    바꾼다. 그것은 disruption 설정이 정한다.
+capacityTypesByTier:
+  prd:
+    - on-demand
+  nonprd:
+    - spot
+    - on-demand
 
 # 범용 3종. ⚠️ `t` 계열은 일부러 뺐다 — 버스트 크레딧 모델이라 Karpenter 의 용량 계산과 어긋난다.
 instanceCategories:
