@@ -143,6 +143,10 @@ jobs:
           if helm template t addons/cluster-addons --set "$base,cluster.tier=prod" >/dev/null 2>&1; then
             echo "tier=prod 가 렌더를 통과했다. required 가 빠졌다"; exit 1
           fi
+          # prd 는 on-demand 전용이다. nonprd 의 spot 이 prd 로 새지 않는지 본다.
+          if helm template t addons/karpenter/nodepool --set clusterName=eks-x,nodeRole=role-x,tier=prd | grep -qx ' *- spot'; then
+            echo "prd 렌더의 capacity-type 에 spot 이 있다"; exit 1
+          fi
 
       - name: kyverno test
         run: |
