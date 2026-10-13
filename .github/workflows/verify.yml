@@ -119,18 +119,18 @@ jobs:
           # 두 줄을 모두 --set 으로 준다. values.yaml 의 값에 기대면 한 티어를 실제로 켠 PR 이 이 검사에 걸린다.
           for on in prd nonprd; do
             if [ "$on" = prd ]; then off=nonprd; else off=prd; fi
-            hold="clusterName=eks-x,nodeRole=role-x,upgradeHoldByTier.$on=true,upgradeHoldByTier.$off=false"
+            hold="clusterName=eks-x,nodeRole=role-x,disruptionBlockByTier.$on=true,disruptionBlockByTier.$off=false"
             helm template t addons/karpenter/nodepool --set "$hold,tier=$on" | grep -q 'Drifted' \
-              || { echo "upgradeHoldByTier.$on=true 인데 $on 렌더에 차단이 없다"; exit 1; }
+              || { echo "disruptionBlockByTier.$on=true 인데 $on 렌더에 차단이 없다"; exit 1; }
             if helm template t addons/karpenter/nodepool --set "$hold,tier=$off" | grep -q 'Drifted'; then
-              echo "upgradeHoldByTier.$on=true 가 $off 렌더에 차단을 걸었다"; exit 1
+              echo "disruptionBlockByTier.$on=true 가 $off 렌더에 차단을 걸었다"; exit 1
             fi
           done
           # disruption 은 티어마다 다른 것이 정상이다. prd 의 업무 시간 budget 이 nonprd 로 새지 않는지 본다.
           np="clusterName=eks-x,nodeRole=role-x"
           helm template t addons/karpenter/nodepool --set "$np,tier=prd" | grep -q 'schedule:' \
             || { echo "prd 렌더에 업무 시간 budget(schedule)이 없다"; exit 1; }
-          if helm template t addons/karpenter/nodepool --set "$np,tier=nonprd,upgradeHoldByTier.nonprd=false" | grep -q 'schedule:'; then
+          if helm template t addons/karpenter/nodepool --set "$np,tier=nonprd,disruptionBlockByTier.nonprd=false" | grep -q 'schedule:'; then
             echo "nonprd 렌더에 schedule budget 이 있다"; exit 1
           fi
           helm lint addons/gateway/shared-gateway --set environment=dev --quiet
