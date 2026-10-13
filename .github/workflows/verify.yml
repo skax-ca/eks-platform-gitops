@@ -122,6 +122,13 @@ jobs:
           if helm template t addons/karpenter/nodepool --set "$hold,tier=prd" | grep -q 'Drifted'; then
             echo "upgradeHoldByTier.nonprd=true 가 prd 렌더에 보류를 걸었다"; exit 1
           fi
+          # disruption 은 티어마다 다른 것이 정상이다. prd 의 업무 시간 budget 이 nonprd 로 새지 않는지 본다.
+          np="clusterName=eks-x,nodeRole=role-x"
+          helm template t addons/karpenter/nodepool --set "$np,tier=prd" | grep -q 'schedule:' \
+            || { echo "prd 렌더에 업무 시간 budget(schedule)이 없다"; exit 1; }
+          if helm template t addons/karpenter/nodepool --set "$np,tier=nonprd,upgradeHoldByTier.nonprd=false" | grep -q 'schedule:'; then
+            echo "nonprd 렌더에 schedule budget 이 있다"; exit 1
+          fi
           helm lint addons/gateway/shared-gateway --set environment=dev --quiet
           helm template t addons/gateway/shared-gateway --set environment=dev >/dev/null
           base=cluster.name=eks-x,cluster.server=https://x,cluster.environment=dev,cluster.vpcName=vpc-x,cluster.karpenterNodeRole=role-x
