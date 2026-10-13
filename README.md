@@ -351,7 +351,7 @@ Terraform 쪽 `enable_*` 기본값은 기준이 아니다 — `aws-load-balancer
 | `karpenter` | `public.ecr.aws/karpenter`(OCI) | 1.14.1 | `kube-system` | 1 | baseline |
 | `kyverno` | `kyverno.github.io/kyverno` | 3.9.1 | `kyverno` | 1 | baseline, `CreateNamespace=true` |
 | `keda` | `kedacore.github.io/charts` | 2.20.2 | `keda` | 1 | opt-in(cluster Secret 라벨 `addon-keda: enabled`) |
-| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0(이미지 v1.35.0) | `kube-system` | 1 | baseline. 이미지 태그가 티어별로 클러스터의 k8s 마이너를 따라간다 |
+| `cluster-autoscaler` | `kubernetes.github.io/autoscaler` | 9.59.0(이미지 v1.36.1) | `kube-system` | 1 | baseline. 이미지 태그가 티어별로 클러스터의 k8s 마이너를 따라간다 |
 | `karpenter` NodePool/EC2NodeClass | 로컬 차트(`addons/karpenter/nodepool/`) | — | `kube-system` | 2 | baseline |
 | `gateway`(GatewayClass·LoadBalancerConfiguration·Gateway) | 로컬 차트(`addons/gateway/shared-gateway/`) | — | `gateway-system` | 2 | baseline, `CreateNamespace=true`. HTTPRoute·백엔드는 앱팀 저장소 소관(범위 밖) |
 | `kyverno-policies` · 커스텀 정책 | `kyverno.github.io/kyverno` · `addons/kyverno/custom-policies/` | 3.9.1 · — | `kyverno` | 2 | baseline |
